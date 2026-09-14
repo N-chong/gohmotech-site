@@ -34,7 +34,7 @@
         text-transform: uppercase;
     }
     .inv-page-header .page-subtitle { margin: 0; color: var(--text-secondary); }
-    .inv-page-header .page-actions { flex: 0 0 auto; }
+    .inv-page-header .page-actions { flex: 0 0 auto; display: flex; gap: .6rem; flex-wrap: wrap; }
 
     /* Touch-friendly controls for farmers/caretakers */
     .inv-page .btn { min-height: 46px; display: inline-flex; align-items: center; gap: 0.45rem; }
@@ -238,11 +238,16 @@
             <h1>Goat Inventory</h1>
             <p class="page-subtitle">Livestock records — view, search, and manage your herd</p>
         </div>
-        {% if can_manage_farm %}<div class="page-actions">
+        <div class="page-actions">
+            <a href="{% url 'iot:goat_comparison' %}" class="btn btn-outline">
+                <i class="bi bi-arrow-left-right"></i> Compare Photos
+            </a>
+        {% if can_manage_farm %}
             <a href="{% url 'iot:add_goat' %}" class="btn btn-primary">
                 <i class="bi bi-plus-circle"></i> Add Goat
             </a>
-        </div>{% else %}<span class="badge bg-secondary">Read-only inventory</span>{% endif %}
+        {% else %}<span class="badge bg-secondary">Read-only inventory</span>{% endif %}
+        </div>
     </div>
 
     <!-- Statistics -->

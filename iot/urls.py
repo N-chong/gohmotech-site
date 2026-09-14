@@ -16,7 +16,7 @@ from .views import (
 
 # Phase 5: Enhanced Goat Management Views
 from .goat_views import (
-    goat_inventory, goat_detail_enhanced, update_goat_status,
+    goat_inventory, goat_comparison, goat_detail_enhanced, update_goat_status,
     missing_goat_alerts, resolve_alert, detection_history, upload_goat_image,
     delete_goat_image, scale_reading_ingest, goat_weight_live, save_goat_weight
 )
@@ -52,6 +52,7 @@ urlpatterns = [
     
     # Phase 5: Enhanced Goat Management
     path('inventory/', goat_inventory, name='goat_inventory'),  # New main inventory page
+    path('inventory/compare/', goat_comparison, name='goat_comparison'),
     path('inventory/<str:goat_id>/', goat_detail_enhanced, name='goat_detail_enhanced'),
     path('inventory/<str:goat_id>/upload-image/', upload_goat_image, name='upload_goat_image'),
     path('inventory/<str:goat_id>/update-status/', update_goat_status, name='update_goat_status'),

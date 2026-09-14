@@ -350,6 +350,18 @@ class GoatWeightMeasurement(models.Model):
 
 class GoatImage(models.Model):
     """Images of individual goats for ML training and visual reference"""
+    FRONT = 'front'
+    LEFT = 'left'
+    RIGHT = 'right'
+    REAR = 'rear'
+    FACE = 'face'
+    ANGLE_CHOICES = [
+        (FRONT, 'Front View'),
+        (LEFT, 'Left Side View'),
+        (RIGHT, 'Right Side View'),
+        (REAR, 'Rear View'),
+        (FACE, 'Face Close-up'),
+    ]
     IMAGE_TYPE_CHOICES = [
         ('profile', 'Profile Picture'),
         ('full_body', 'Full Body'),
@@ -372,6 +384,23 @@ class GoatImage(models.Model):
         max_length=20,
         choices=IMAGE_TYPE_CHOICES,
         default='identification'
+    )
+    angle = models.CharField(
+        max_length=10,
+        choices=ANGLE_CHOICES,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text='Standardized camera angle; blank preserves legacy/gallery images.',
+    )
+    captured_at = models.DateTimeField(
+        default=timezone.now,
+        help_text='When this reference photo was captured or selected.',
+    )
+    is_primary = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text='Fallback inventory image when front and left views are unavailable.',
     )
     description = models.TextField(
         blank=True,
@@ -414,9 +443,33 @@ class GoatImage(models.Model):
             models.Index(fields=['is_training_data']),
             models.Index(fields=['embedding_extracted']),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['goat', 'angle'],
+                name='unique_goat_standard_photo_angle',
+            ),
+        ]
     
     def __str__(self):
-        return f"{self.goat.goat_id} - {self.image_type} ({self.uploaded_at.date()})"
+        label = self.get_angle_display() if self.angle else self.get_image_type_display()
+        return f"{self.goat.goat_id} - {label} ({self.uploaded_at.date()})"
+
+    @classmethod
+    def preferred_from(cls, images):
+        """Choose a stable inventory cover without breaking legacy galleries."""
+        photos = list(images)
+        if not photos:
+            return None
+        newest_first = sorted(
+            photos,
+            key=lambda photo: (photo.uploaded_at, photo.pk or 0),
+            reverse=True,
+        )
+        for angle in (cls.FRONT, cls.LEFT):
+            match = next((photo for photo in newest_first if photo.angle == angle), None)
+            if match:
+                return match
+        return next((photo for photo in newest_first if photo.is_primary), newest_first[0])
 
 
 class GoatBehaviorLog(models.Model):
@@ -1524,4 +1577,3 @@ class BLETrackingSettings(models.Model):
     def get_config(cls):
         config, _ = cls.objects.get_or_create(pk=1)
         return config
-

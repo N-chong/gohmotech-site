@@ -280,7 +280,9 @@ def owner_dashboard(request):
 
     goats_with_images = []
     for goat in owned_goats:
-        goat.latest_image = GoatImage.objects.filter(goat=goat).order_by("-uploaded_at").first()
+        goat.latest_image = GoatImage.preferred_from(
+            GoatImage.objects.filter(goat=goat)
+        )
         latest_behavior = GoatBehaviorLog.objects.filter(goat=goat).order_by("-timestamp").first()
         goat.latest_behavior = latest_behavior
         goat.last_seen_ago = _format_time_ago(goat.last_seen) if goat.last_seen else "Never detected"

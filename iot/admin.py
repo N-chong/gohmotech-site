@@ -44,7 +44,7 @@ class SensorReadingAdmin(admin.ModelAdmin):
 class GoatImageInline(admin.TabularInline):
     model = GoatImage
     extra = 1
-    fields = ['image', 'image_type', 'description', 'is_training_data']
+    fields = ['image', 'angle', 'image_type', 'captured_at', 'is_primary', 'description', 'is_training_data']
 
 
 @admin.register(Goat)
@@ -97,8 +97,8 @@ class GoatWeightMeasurementAdmin(admin.ModelAdmin):
 
 @admin.register(GoatImage)
 class GoatImageAdmin(admin.ModelAdmin):
-    list_display = ['goat', 'image_type', 'uploaded_at', 'is_training_data', 'is_processed', 'embedding_extracted']
-    list_filter = ['image_type', 'is_training_data', 'is_processed', 'embedding_extracted', 'uploaded_at']
+    list_display = ['goat', 'angle', 'image_type', 'is_primary', 'captured_at', 'uploaded_at', 'is_training_data', 'is_processed', 'embedding_extracted']
+    list_filter = ['angle', 'is_primary', 'image_type', 'is_training_data', 'is_processed', 'embedding_extracted', 'uploaded_at']
     search_fields = ['goat__goat_id', 'goat__name']
     # date_hierarchy = 'uploaded_at'  # Commented out - requires MySQL timezone tables on Windows
 

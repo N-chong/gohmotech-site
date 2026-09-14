@@ -28,6 +28,7 @@ from .status_utils import (
     is_device_online, controller_status, system_status,
 )
 from .device_authentication import HasLegacyDeviceKey
+from .goat_photos import photo_slots, prepared_standard_photos, save_standard_photo
 
 
 def _bounded_hours(request, default=24, maximum=168):
@@ -558,7 +559,8 @@ def add_goat(request):
         beacon_form = BLEBeaconForm(request.POST, prefix='ble')
         goat_valid = form.is_valid()
         beacon_valid = beacon_form.is_valid()
-        if goat_valid and beacon_valid:
+        prepared_photos, photo_errors = prepared_standard_photos(request)
+        if goat_valid and beacon_valid and not photo_errors:
             with transaction.atomic():
                 goat = form.save(commit=False)
                 goat.owner = request.user
@@ -570,6 +572,8 @@ def add_goat(request):
                 captured_photo = form.cleaned_data.get('captured_photo', '')
                 if captured_photo and GoatImage is not None:
                     _save_captured_photo(goat, captured_photo)
+                for angle, normalized in prepared_photos.items():
+                    save_standard_photo(goat, angle, normalized)
 
             messages.success(request, f'Goat "{goat.goat_id}" has been added successfully!')
             return redirect('iot:goat_detail_enhanced', goat_id=goat.goat_id)
@@ -578,10 +582,13 @@ def add_goat(request):
     else:
         form = GoatForm()
         beacon_form = BLEBeaconForm(prefix='ble')
+        photo_errors = {}
 
     context = {
         'form': form,
         'beacon_form': beacon_form,
+        'photo_slots': photo_slots(errors=photo_errors),
+        'photo_errors': photo_errors,
         'page_title': 'Add New Goat'
     }
     return render(request, 'iot/add_goat.html', context)
@@ -615,6 +622,7 @@ def _save_captured_photo(goat, data_url):
             goat=goat,
             image_type='profile',
             description='Reference photo captured via webcam during manual registration',
+            is_primary=not GoatImage.objects.filter(goat=goat, is_primary=True).exists(),
         )
         goat_image.image.save(file_name, ContentFile(image_data), save=True)
         return goat_image

@@ -1,0 +1,61 @@
+{% extends 'base_modern.html' %}
+{% load static %}
+
+{% block title %}Compare Goat Photos - GoHMoTech{% endblock %}
+{% block header_title %}Compare Goats{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/goat-photos.css' %}">{% endblock %}
+
+{% block content %}
+<div class="manage-page">
+    <div class="page-header">
+        <div>
+            <div class="page-eyebrow"><a href="{% url 'iot:goat_inventory' %}"><i class="bi bi-arrow-left"></i> Goat Inventory</a></div>
+            <h1>Visual Goat Comparison</h1>
+            <p class="page-subtitle">Compare the same standardized view side-by-side. No identity conclusion is made automatically.</p>
+        </div>
+    </div>
+
+    <form method="get" class="info-section mb-4">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label" for="goat-a">Goat A</label>
+                <select class="form-select" id="goat-a" name="goat_a">
+                    <option value="">Select a goat</option>
+                    {% for item in goats %}<option value="{{ item.goat_id }}" {% if selected_a.goat.pk == item.pk %}selected{% endif %}>{{ item.goat_id }}{% if item.name %} — {{ item.name }}{% endif %}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="goat-b">Goat B</label>
+                <select class="form-select" id="goat-b" name="goat_b">
+                    <option value="">Select a goat</option>
+                    {% for item in goats %}<option value="{{ item.goat_id }}" {% if selected_b.goat.pk == item.pk %}selected{% endif %}>{{ item.goat_id }}{% if item.name %} — {{ item.name }}{% endif %}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="comparison-angle">Photo Angle</label>
+                <select class="form-select" id="comparison-angle" name="angle">
+                    {% for value,label in angle_choices %}<option value="{{ value }}" {% if selected_angle == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-md-1"><button class="btn btn-primary w-100" type="submit"><i class="bi bi-arrow-left-right"></i><span class="visually-hidden">Compare</span></button></div>
+        </div>
+    </form>
+
+    <div class="comparison-grid">
+        {% for selection in selections %}
+        <article class="comparison-photo">
+            {% if selection.goat %}
+                <h2>{{ selection.goat.goat_id }}{% if selection.goat.name %} — {{ selection.goat.name }}{% endif %}</h2>
+                <p class="text-muted">{{ selected_angle_label }}</p>
+                <div class="comparison-photo-frame">
+                    {% if selection.photo %}<img src="{{ selection.photo.image.url }}" alt="{{ selection.goat.goat_id }} {{ selected_angle_label }}">
+                    {% else %}<div class="text-center"><i class="bi bi-camera" style="font-size:2rem"></i><p class="mb-0">No {{ selected_angle_label|lower }} available</p></div>{% endif %}
+                </div>
+            {% else %}
+                <div class="comparison-photo-frame"><p>Select a goat above.</p></div>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

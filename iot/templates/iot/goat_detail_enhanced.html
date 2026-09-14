@@ -3,6 +3,7 @@
 
 {% block title %}Manage {{ goat.goat_id }} - GoHMoTech{% endblock %}
 {% block header_title %}Manage Goat{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/goat-photos.css' %}">{% endblock %}
 
 {% block extra_css %}
     /* ============================================================
@@ -568,65 +569,22 @@
             </div>
         </div>
 
-        <!-- Image Gallery -->
+        {% include 'iot/_goat_photo_section.html' %}
+
+        {% if legacy_images %}
         <div class="info-section">
-            <div class="section-header">
-                <i class="bi bi-images"></i>
-                <h3>Image Gallery</h3>
-                <span class="badge bg-secondary">{{ image_count }} image{{ image_count|pluralize }}</span>
-            </div>
-
-            {% if images %}
-                <div class="image-gallery">
-                    {% for image in images %}
-                    <div class="gallery-item">
-                        <img src="{{ image.image.url }}" alt="Goat image">
-                        {% if can_manage_farm %}<div class="gallery-item-overlay">
-                            <button type="button" class="delete-image-btn" onclick="deleteImage({{ image.id }}, this)">
-                                <i class="bi bi-trash"></i> Delete
-                            </button>
-                        </div>{% endif %}
-                    </div>
-                    {% endfor %}
+            <div class="section-header"><i class="bi bi-images"></i><h3>Existing Gallery Photos</h3><span class="badge bg-secondary">{{ legacy_images|length }}</span></div>
+            <p class="text-muted">These earlier photos are preserved. Add standardized angles gradually; no existing record is required to change immediately.</p>
+            <div class="image-gallery">
+                {% for image in legacy_images %}
+                <div class="gallery-item">
+                    <img src="{{ image.image.url }}" alt="Existing photo of {{ goat.goat_id }}">
+                    {% if can_manage_farm %}<div class="gallery-item-overlay"><button type="button" class="delete-image-btn" onclick="deleteImage({{ image.id }}, this)"><i class="bi bi-trash"></i> Delete</button></div>{% endif %}
                 </div>
-            {% else %}
-                <p style="color: var(--text-secondary); margin-top: var(--spacing-lg);">
-                    No images yet. Upload or capture photos below.
-                </p>
-            {% endif %}
-
-            {% if can_manage_farm %}<!-- Upload Area -->
-            <div class="upload-area" id="upload-area">
-                <i class="bi bi-cloud-arrow-up"></i>
-                <p style="font-weight: 600; font-size: 1rem;">Click or drag images here</p>
-                <p style="font-size: 0.875rem;">Upload multiple images (JPG, PNG)</p>
-                <input type="file" name="images" id="file-input" accept="image/*" multiple style="display: none;">
+                {% endfor %}
             </div>
-
-            <!-- Webcam Capture -->
-            <div class="webcam-wrapper">
-                <h4 style="margin-bottom: var(--spacing-md);">
-                    <i class="bi bi-camera"></i> Capture with Webcam
-                </h4>
-                <div style="margin-bottom: var(--spacing-md);">
-                    <button type="button" class="btn btn-outline" id="start-webcam-btn">
-                        <i class="bi bi-camera-video"></i> Start Webcam
-                    </button>
-                    <button type="button" class="btn btn-primary" id="capture-btn" style="display: none;">
-                        <i class="bi bi-camera"></i> Capture Photo
-                    </button>
-                    <button type="button" class="btn btn-secondary" id="stop-webcam-btn" style="display: none;">
-                        <i class="bi bi-x-circle"></i> Stop Webcam
-                    </button>
-                </div>
-                <video id="webcam-video" autoplay playsinline style="display: none;"></video>
-                <canvas id="webcam-canvas"></canvas>
-                <div class="capture-preview" id="capture-preview"></div>
-            </div>
-
-            <!-- Hidden field for captured photos (JSON array of data URLs) -->
-            <input type="hidden" name="captured_photos" id="captured-photos-field">{% endif %}
         </div>
+        {% endif %}
 
         <!-- Save Actions -->
         <div class="save-actions">
@@ -903,6 +861,7 @@ saveWeightButton.addEventListener('click', async () => {
 const uploadArea = document.getElementById('upload-area');
 const fileInput = document.getElementById('file-input');
 
+if (uploadArea && fileInput) {
 uploadArea.addEventListener('click', () => fileInput.click());
 
 uploadArea.addEventListener('dragover', (e) => {
@@ -931,6 +890,7 @@ function updateUploadText() {
         uploadArea.querySelector('p').textContent = `${count} image${count > 1 ? 's' : ''} selected`;
     }
 }
+}
 
 // ============================================================
 // Webcam Capture
@@ -943,6 +903,7 @@ const startBtn = document.getElementById('start-webcam-btn');
 const captureBtn = document.getElementById('capture-btn');
 const stopBtn = document.getElementById('stop-webcam-btn');
 
+if (video && canvas && capturePreview && capturedField && startBtn && captureBtn && stopBtn) {
 let stream = null;
 const capturedPhotos = [];
 
@@ -1002,6 +963,7 @@ function removeCaptured(idx) {
     updateCapturePreview();
     updateCapturedField();
 }
+}
 
 // ============================================================
 // Delete Image (AJAX)
@@ -1038,11 +1000,7 @@ function deleteImage(imageId, btn) {
 }
 
 // Stop webcam if user leaves page
-window.addEventListener('beforeunload', () => {
-    if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-    }
-});
 </script>
+<script src="{% static 'js/goat-photo-capture.js' %}"></script>
 {% endif %}
 {% endblock %}

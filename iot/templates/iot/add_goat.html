@@ -2,6 +2,7 @@
 {% load static %}
 
 {% block title %}Add New Goat - GoHMoTech{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/goat-photos.css' %}">{% endblock %}
 
 {% block content %}
     <!-- Hero Banner -->
@@ -47,49 +48,11 @@
                     </h5>
                 </div>
                 <div class="card-body-custom">
-                    <form method="post" novalidate id="addGoatForm">
+                    <form method="post" enctype="multipart/form-data" novalidate id="addGoatForm">
                         {% csrf_token %}
                         {{ form.captured_photo }}
 
-                        <!-- Photo Section (Webcam Capture) -->
-                        <div class="form-section mb-4">
-                            <h6 class="section-title">
-                                <i class="bi bi-camera"></i> Photo (Optional)
-                            </h6>
-                            <div class="row g-3">
-                                <div class="col-12">
-                                    <div id="webcamContainer" style="display: none;">
-                                        <video id="webcamVideo" autoplay playsinline style="width: 100%; max-width: 480px; border-radius: var(--radius-md); border: 1px solid var(--border-color);"></video>
-                                        <div class="mt-3">
-                                            <button type="button" class="btn btn-primary" id="captureBtn">
-                                                <i class="bi bi-camera-fill"></i> Capture Photo
-                                            </button>
-                                            <button type="button" class="btn btn-secondary" id="cancelCameraBtn">
-                                                <i class="bi bi-x-circle"></i> Cancel
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div id="previewContainer" style="display: none;">
-                                        <img id="photoPreview" src="" alt="Captured photo" style="width: 100%; max-width: 480px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                                        <div class="mt-3">
-                                            <button type="button" class="btn btn-warning" id="retakeBtn">
-                                                <i class="bi bi-arrow-repeat"></i> Retake
-                                            </button>
-                                            <button type="button" class="btn btn-danger" id="deletePhotoBtn">
-                                                <i class="bi bi-trash"></i> Remove Photo
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div id="cameraPrompt">
-                                        <button type="button" class="btn btn-outline-primary" id="startCameraBtn">
-                                            <i class="bi bi-camera"></i> Capture Photo via Webcam
-                                        </button>
-                                        <small class="form-text text-muted d-block mt-2">Optional: Take a reference photo of the goat</small>
-                                    </div>
-                                    <div id="cameraError" class="alert alert-warning mt-3" style="display: none;"></div>
-                                </div>
-                            </div>
-                        </div>
+                        {% include 'iot/_goat_photo_section.html' %}
 
                         <!-- Identification Section -->
                         <div class="form-section mb-4">
@@ -464,4 +427,5 @@
     window.addEventListener('beforeunload', stopStream);
 })();
 </script>
+<script src="{% static 'js/goat-photo-capture.js' %}"></script>
 {% endblock %}

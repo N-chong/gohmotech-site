@@ -5,7 +5,7 @@ Includes AI detection integration, status management, and detailed analytics
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.cache import cache
 from django.db import transaction
 from django.db.utils import IntegrityError
@@ -22,9 +22,6 @@ import logging
 import math
 import uuid
 
-from PIL import Image, UnidentifiedImageError
-from marketplace.image_utils import optimize_marketplace_image
-
 logger = logging.getLogger(__name__)
 
 from .goat_models import (
@@ -32,6 +29,13 @@ from .goat_models import (
 )
 from .forms import BLEBeaconForm, GoatForm
 from .device_authentication import device_key_required
+from .goat_photos import (
+    delete_goat_photo,
+    photo_slots,
+    prepared_standard_photos,
+    save_standard_photo,
+    validated_goat_image,
+)
 from marketplace.decorators import farm_access_required, farm_owner_required
 from marketplace.auth import can_manage_farm
 
@@ -41,35 +45,7 @@ SCALE_CACHE_TTL_SECONDS = 15
 SCALE_OFFLINE_AFTER_SECONDS = 5
 MIN_GOAT_WEIGHT_KG = Decimal('0.10')
 MAX_GOAT_WEIGHT_KG = Decimal('300.00')
-MAX_GOAT_IMAGE_BYTES = 5 * 1024 * 1024
-MAX_GOAT_IMAGE_PIXELS = 25_000_000
-
-
-def _validated_goat_image(upload):
-    """Verify and normalize a farm image before it reaches public media."""
-    if not upload or getattr(upload, 'size', 0) > MAX_GOAT_IMAGE_BYTES:
-        raise ValidationError('Goat photos must be 5 MB or smaller.')
-    content_type = (getattr(upload, 'content_type', '') or '').lower()
-    if content_type not in {'image/jpeg', 'image/png', 'image/webp'}:
-        raise ValidationError('Upload a valid JPG, PNG, or WebP image.')
-    try:
-        upload.seek(0)
-        with Image.open(upload) as candidate:
-            width, height = candidate.size
-            if width * height > MAX_GOAT_IMAGE_PIXELS:
-                raise ValidationError('Goat photos must be 25 megapixels or smaller.')
-            candidate.verify()
-        upload.seek(0)
-        return optimize_marketplace_image(upload)
-    except ValidationError:
-        raise
-    except (OSError, ValueError, UnidentifiedImageError) as exc:
-        raise ValidationError('The selected goat photo could not be verified.') from exc
-    finally:
-        try:
-            upload.seek(0)
-        except (AttributeError, OSError):
-            pass
+_validated_goat_image = validated_goat_image
 
 
 def _scale_cache_key(device_id=SCALE_DEVICE_ID):
@@ -275,53 +251,6 @@ def save_goat_weight(request, goat_id):
     return JsonResponse(_measurement_payload(measurement), status=201)
 
 
-def _save_data_url_image(goat, data_url, image_type='identification',
-                         description='Captured via camera'):
-    """Decode a base64 data URL (webcam capture) and store it as a GoatImage.
-
-    Stored exactly like an uploaded image so captured and uploaded photos are
-    treated identically. Visual reference only.
-    """
-    import base64
-    import uuid
-    from django.core.files.base import ContentFile
-
-    try:
-        if ';base64,' in data_url:
-            header, encoded = data_url.split(';base64,', 1)
-            ext = 'jpg'
-            if '/' in header:
-                ext = header.split('/')[-1].split(';')[0] or 'jpg'
-            if ext == 'jpeg':
-                ext = 'jpg'
-        else:
-            encoded = data_url
-            ext = 'jpg'
-
-        image_data = base64.b64decode(encoded, validate=True)
-        if len(image_data) > MAX_GOAT_IMAGE_BYTES:
-            raise ValidationError('Captured goat photos must be 5 MB or smaller.')
-        file_name = f"{goat.goat_id}_{uuid.uuid4().hex[:8]}.{ext}"
-        upload = ContentFile(image_data, name=file_name)
-        upload.content_type = 'image/png' if ext == 'png' else (
-            'image/webp' if ext == 'webp' else 'image/jpeg'
-        )
-        normalized = _validated_goat_image(upload)
-
-        goat_image = GoatImage(
-            goat=goat,
-            image_type=image_type if image_type in {
-                'profile', 'full_body', 'face', 'identification', 'health', 'training'
-            } else 'identification',
-            description=description,
-        )
-        goat_image.image.save(normalized.name, normalized, save=True)
-        return goat_image
-    except Exception as exc:
-        logger.error(f"Failed to save captured photo for {goat.goat_id}: {exc}")
-        return None
-
-
 @farm_access_required
 def goat_inventory(request):
     """
@@ -355,9 +284,9 @@ def goat_inventory(request):
 
     goats = goats.order_by('-date_added')
 
-    # Attach cover image for each goat (newest image acts as the cover)
+    # Front, then left, then an explicitly selected/legacy primary image.
     for goat in goats:
-        goat.latest_image = goat.inventory_images[0] if goat.inventory_images else None
+        goat.latest_image = GoatImage.preferred_from(goat.inventory_images)
 
     # Statistics
     total_goats = Goat.objects.count()
@@ -384,6 +313,36 @@ def goat_inventory(request):
 
 
 @farm_access_required
+def goat_comparison(request):
+    """Compare the same standardized photo angle for two selected goats."""
+    goats = list(Goat.objects.order_by('goat_id'))
+    valid_angles = dict(GoatImage.ANGLE_CHOICES)
+    angle = request.GET.get('angle', GoatImage.FRONT)
+    if angle not in valid_angles:
+        angle = GoatImage.FRONT
+
+    selected = []
+    for parameter in ('goat_a', 'goat_b'):
+        goat_id = request.GET.get(parameter, '').strip()
+        goat = next((item for item in goats if item.goat_id == goat_id), None)
+        photo = None
+        if goat:
+            photo = GoatImage.objects.filter(goat=goat, angle=angle).first()
+        selected.append({'goat': goat, 'photo': photo, 'parameter': parameter})
+
+    return render(request, 'iot/goat_comparison.html', {
+        'goats': goats,
+        'selected_a': selected[0],
+        'selected_b': selected[1],
+        'selections': selected,
+        'selected_angle': angle,
+        'selected_angle_label': valid_angles[angle],
+        'angle_choices': GoatImage.ANGLE_CHOICES,
+        'page_title': 'Compare Goat Photos',
+    })
+
+
+@farm_access_required
 def goat_detail_enhanced(request, goat_id):
     """
     Modern goat management page: view & edit all livestock information,
@@ -394,6 +353,7 @@ def goat_detail_enhanced(request, goat_id):
     goat = get_object_or_404(Goat, goat_id=goat_id)
     beacon = getattr(goat, 'ble_beacon', None)
 
+    photo_errors = {}
     if request.method == 'POST':
         if not can_manage_farm(request.user):
             raise PermissionDenied('Farm Operators cannot modify goat records.')
@@ -402,42 +362,14 @@ def goat_detail_enhanced(request, goat_id):
         beacon_form = BLEBeaconForm(request.POST, instance=beacon, prefix='ble')
         goat_valid = form.is_valid()
         beacon_valid = beacon_form.is_valid()
-        if goat_valid and beacon_valid:
+        prepared_photos, photo_errors = prepared_standard_photos(request)
+        if goat_valid and beacon_valid and not photo_errors:
             with transaction.atomic():
                 updated = form.save()
                 beacon = beacon_form.save_for_goat(updated)
 
-                # Save any webcam-captured photos submitted alongside the form.
-                # The template packs one or more data URLs into a JSON array.
-                captured_raw = request.POST.get('captured_photos', '').strip()
-                if captured_raw:
-                    try:
-                        captured_list = json.loads(captured_raw)
-                        if isinstance(captured_list, str):
-                            captured_list = [captured_list]
-                    except (ValueError, TypeError):
-                        captured_list = [captured_raw]
-                    for data_url in captured_list:
-                        if data_url:
-                            _save_data_url_image(
-                                updated, data_url,
-                                description='Captured via camera',
-                            )
-
-                # Save verified, normalized uploads only. Browser MIME claims
-                # are not trusted and executable/polyglot tails are discarded.
-                for image_file in request.FILES.getlist('images'):
-                    try:
-                        normalized = _validated_goat_image(image_file)
-                    except ValidationError as exc:
-                        messages.error(request, exc.messages[0])
-                        continue
-                    GoatImage.objects.create(
-                        goat=updated,
-                        image=normalized,
-                        image_type='identification',
-                        description='Uploaded via manage page',
-                    )
+                for angle, normalized in prepared_photos.items():
+                    save_standard_photo(updated, angle, normalized)
 
             messages.success(request, f'Changes saved for {updated.goat_id}.')
             return redirect('iot:goat_detail_enhanced', goat_id=updated.goat_id)
@@ -453,9 +385,9 @@ def goat_detail_enhanced(request, goat_id):
             for field in beacon_form.fields.values():
                 field.disabled = True
 
-    # Image gallery — newest first; the newest image acts as the cover/primary.
-    images = GoatImage.objects.filter(goat=goat).order_by('-uploaded_at')
-    cover_image = images.first()
+    images = list(GoatImage.objects.filter(goat=goat).order_by('-uploaded_at'))
+    cover_image = GoatImage.preferred_from(images)
+    legacy_images = [image for image in images if not image.angle]
     tracking_state = None
     if beacon:
         tracking_state = beacon.tracking_states.select_related(
@@ -469,8 +401,11 @@ def goat_detail_enhanced(request, goat_id):
         'beacon_form': beacon_form,
         'tracking_state': tracking_state,
         'images': images,
+        'legacy_images': legacy_images,
+        'photo_slots': photo_slots(images, photo_errors),
+        'photo_errors': photo_errors,
         'cover_image': cover_image,
-        'image_count': images.count(),
+        'image_count': len(images),
         'weight_history': goat.weight_measurements.select_related('recorded_by').all(),
         'page_title': f'Manage: {goat.goat_id}',
     }
@@ -484,13 +419,13 @@ def delete_goat_image(request, goat_id, image_id):
     """Delete a single image from a goat's gallery (Goat Inventory module)."""
     goat = get_object_or_404(Goat, goat_id=goat_id)
     image = get_object_or_404(GoatImage, id=image_id, goat=goat)
-    image.delete()
+    delete_goat_photo(image)
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return JsonResponse({'success': True, 'image_id': image_id})
 
     messages.success(request, 'Image deleted.')
-    return redirect('goat_detail_enhanced', goat_id=goat_id)
+    return redirect('iot:goat_detail_enhanced', goat_id=goat_id)
 
 
 @farm_owner_required
@@ -503,6 +438,7 @@ def upload_goat_image(request, goat_id):
 
     image_file = request.FILES.get('image')
     image_type = request.POST.get('image_type', 'identification')
+    angle = request.POST.get('angle', '').strip()
     description = request.POST.get('description', '').strip()
     is_training_data = request.POST.get('is_training_data') == 'on'
 
@@ -512,27 +448,34 @@ def upload_goat_image(request, goat_id):
 
     if not image_file:
         messages.error(request, 'Please select an image to upload.')
-        return redirect('goat_detail_enhanced', goat_id=goat_id)
+        return redirect('iot:goat_detail_enhanced', goat_id=goat_id)
 
     if image_type not in valid_image_types:
         image_type = 'identification'
 
     try:
-        normalized = _validated_goat_image(image_file)
+        normalized = _validated_goat_image(image_file, check_quality=bool(angle))
     except ValidationError as exc:
         messages.error(request, exc.messages[0])
-        return redirect('goat_detail_enhanced', goat_id=goat_id)
+        return redirect('iot:goat_detail_enhanced', goat_id=goat_id)
 
-    GoatImage.objects.create(
-        goat=goat,
-        image=normalized,
-        image_type=image_type,
-        description=description,
-        is_training_data=is_training_data,
-    )
+    if angle in dict(GoatImage.ANGLE_CHOICES):
+        saved = save_standard_photo(goat, angle, normalized, description=description)
+        saved.is_training_data = is_training_data
+        saved.save(update_fields=['is_training_data'])
+    else:
+        GoatImage.objects.filter(goat=goat, is_primary=True).update(is_primary=False)
+        GoatImage.objects.create(
+            goat=goat,
+            image=normalized,
+            image_type=image_type,
+            description=description,
+            is_training_data=is_training_data,
+            is_primary=True,
+        )
 
     messages.success(request, f'Image uploaded successfully for {goat.goat_id}.')
-    return redirect('goat_detail_enhanced', goat_id=goat_id)
+    return redirect('iot:goat_detail_enhanced', goat_id=goat_id)
 
 
 @farm_owner_required

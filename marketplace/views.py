@@ -98,9 +98,8 @@ def _add_model_validation_errors(form, exc):
 def _attach_images(listings):
     for listing in listings:
         prefetched = getattr(listing.goat, "marketplace_images", None)
-        listing.display_image = (
-            prefetched[0] if prefetched else None
-        ) if prefetched is not None else listing.goat.images.order_by("-uploaded_at").first()
+        photos = prefetched if prefetched is not None else listing.goat.images.all()
+        listing.display_image = GoatImage.preferred_from(photos)
     return listings
 
 
@@ -122,7 +121,7 @@ def _public_listing_queryset():
             Prefetch(
                 "goat__images",
                 queryset=GoatImage.objects.only(
-                    "id", "goat_id", "image", "uploaded_at"
+                    "id", "goat_id", "image", "angle", "is_primary", "uploaded_at"
                 ).order_by("-uploaded_at"),
                 to_attr="marketplace_images",
             )
@@ -137,12 +136,14 @@ def _public_listing_queryset():
 
 def _save_community_photos(goat, photos):
     for photo in photos:
+        GoatImage.objects.filter(goat=goat, is_primary=True).update(is_primary=False)
         GoatImage.objects.create(
             goat=goat,
             image=photo,
             image_type="identification",
             description="Uploaded by community seller",
             is_training_data=False,
+            is_primary=True,
         )
 
 
@@ -422,7 +423,7 @@ def saved_goats(request):
             Prefetch(
                 "listing__goat__images",
                 queryset=GoatImage.objects.only(
-                    "id", "goat_id", "image", "uploaded_at"
+                    "id", "goat_id", "image", "angle", "is_primary", "uploaded_at"
                 ).order_by("-uploaded_at"),
                 to_attr="marketplace_images",
             )
@@ -699,7 +700,7 @@ def seller_goats(request):
         manageable_goats(request.user).order_by("-date_added")
     )
     for goat in goats:
-        goat.display_image = goat.images.order_by("-uploaded_at").first()
+        goat.display_image = GoatImage.preferred_from(goat.images.all())
     return render(request, "marketplace/seller_goats.html", {"goats": goats})
 
 
@@ -1236,7 +1237,7 @@ def admin_dashboard(request):
         Prefetch(
             "goat__images",
             queryset=GoatImage.objects.only(
-                "id", "goat_id", "image", "uploaded_at"
+                "id", "goat_id", "image", "angle", "is_primary", "uploaded_at"
             ).order_by("-uploaded_at"),
             to_attr="marketplace_images",
         )
