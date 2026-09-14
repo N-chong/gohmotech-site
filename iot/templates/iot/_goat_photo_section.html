@@ -57,6 +57,9 @@
                 <input id="upload-{{ slot.angle }}" class="angle-upload" type="file"
                        name="photo_{{ slot.angle }}" accept="image/jpeg,image/png,image/webp"
                        data-upload-angle="{{ slot.angle }}">
+                <input class="angle-upload" type="file" name="photo_{{ slot.angle }}"
+                       accept="image/*" capture="environment"
+                       data-native-capture-angle="{{ slot.angle }}">
                 {% if slot.photo %}
                 <button type="button" class="btn btn-outline-danger" data-delete-image="{{ slot.photo.id }}">
                     <i class="bi bi-trash"></i><span class="visually-hidden">Delete {{ slot.label }}</span>

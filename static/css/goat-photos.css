@@ -96,10 +96,10 @@ html.guided-camera-open body { overflow: hidden; overscroll-behavior: none; }
     .goat-photo-heading h3 { font-size: 1.2rem; }
     .goat-photo-heading p { font-size: .86rem; line-height: 1.45; }
     .goat-photo-note { display: inline-block; margin-top: .65rem; white-space: normal; }
-    .goat-photo-grid { grid-template-columns: minmax(0, 1fr); gap: .75rem; }
-    .goat-photo-card { padding: .75rem; }
+    .goat-photo-grid { grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+    .goat-photo-card { padding: 1rem; }
     .goat-photo-card > p { min-height: 0; margin-block: .6rem; line-height: 1.4; }
-    .goat-photo-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .5rem; }
+    .goat-photo-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .75rem; }
     .goat-photo-actions .btn { width: 100%; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: .35rem; padding-inline: .5rem; white-space: normal; }
     .goat-photo-actions .btn i { margin-right: 0; }
     .goat-photo-actions .btn-outline-danger { grid-column: 1 / -1; }

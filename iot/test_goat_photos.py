@@ -93,6 +93,15 @@ class StandardGoatPhotoTests(TestCase):
         self.assertEqual(set(goat.images.values_list('angle', flat=True)), {'front', 'left'})
         self.assertTrue(goat.images.get(angle='front').is_primary)
 
+    def test_add_page_has_mobile_camera_fallback_and_fresh_assets(self):
+        response = self.client.get(reverse('iot:add_goat'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-native-capture-angle=', count=5)
+        self.assertContains(response, 'capture="environment"', count=5)
+        self.assertContains(response, 'goat-photos.css?v=mobile-2')
+        self.assertContains(response, 'goat-photo-capture.js?v=mobile-2')
+
     def test_manage_page_can_add_a_standard_angle(self):
         goat = self.create_goat()
         payload = self.goat_payload(goat.goat_id)

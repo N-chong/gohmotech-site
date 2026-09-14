@@ -70,10 +70,11 @@
 
         if (!field || !camera || !video || !canvas) return;
 
-        manager.querySelectorAll('[data-upload-angle]').forEach((input) => {
+        manager.querySelectorAll('[data-upload-angle], [data-native-capture-angle]').forEach((input) => {
             input.addEventListener('change', () => {
                 const file = input.files[0];
                 if (!file) return;
+                const angle = input.dataset.uploadAngle || input.dataset.nativeCaptureAngle;
                 const image = new Image();
                 const source = URL.createObjectURL(file);
                 image.onload = () => {
@@ -85,18 +86,21 @@
                     if (issue) {
                         input.value = '';
                         URL.revokeObjectURL(source);
-                        setMessage(input.dataset.uploadAngle, issue, false);
+                        setMessage(angle, issue, false);
                         return;
                     }
-                    delete captures[input.dataset.uploadAngle];
+                    delete captures[angle];
                     field.value = JSON.stringify(captures);
-                    setPreview(input.dataset.uploadAngle, source);
-                    setMessage(input.dataset.uploadAngle, 'Photo ready. Save changes to upload it.', true);
+                    manager.querySelectorAll(`[data-upload-angle="${angle}"], [data-native-capture-angle="${angle}"]`).forEach((other) => {
+                        if (other !== input) other.value = '';
+                    });
+                    setPreview(angle, source);
+                    setMessage(angle, 'Photo ready. Save changes to upload it.', true);
                 };
                 image.onerror = () => {
                     input.value = '';
                     URL.revokeObjectURL(source);
-                    setMessage(input.dataset.uploadAngle, 'This image could not be read.', false);
+                    setMessage(angle, 'This image could not be read.', false);
                 };
                 image.src = source;
             });
@@ -112,7 +116,7 @@
                 guidance.textContent = card.querySelector('p').textContent;
                 cameraMessage.textContent = '';
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    card.querySelector('[data-upload-angle]').click();
+                    card.querySelector('[data-native-capture-angle]').click();
                     return;
                 }
                 try {
@@ -127,7 +131,8 @@
                     manager.querySelector('[data-camera-shutter]').focus();
                 } catch (error) {
                     stopCamera();
-                    setMessage(activeAngle, 'Camera unavailable. Use Upload to choose a photo instead.', false);
+                    setMessage(activeAngle, 'Opening your phone camera instead.', true);
+                    card.querySelector('[data-native-capture-angle]').click();
                 }
             });
         });
@@ -149,6 +154,8 @@
             field.value = JSON.stringify(captures);
             const upload = manager.querySelector(`[data-upload-angle="${activeAngle}"]`);
             if (upload) upload.value = '';
+            const nativeCapture = manager.querySelector(`[data-native-capture-angle="${activeAngle}"]`);
+            if (nativeCapture) nativeCapture.value = '';
             setPreview(activeAngle, dataUrl);
             setMessage(activeAngle, 'Captured photo ready. Save changes to keep it.', true);
             stopCamera();
