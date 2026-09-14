@@ -99,8 +99,8 @@ class StandardGoatPhotoTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-native-capture-angle=', count=5)
         self.assertContains(response, 'capture="environment"', count=5)
-        self.assertContains(response, 'goat-photos.css?v=mobile-2')
-        self.assertContains(response, 'goat-photo-capture.js?v=mobile-2')
+        self.assertContains(response, 'goat-photos.css?v=mobile-3')
+        self.assertContains(response, 'goat-photo-capture.js?v=mobile-3')
 
     def test_manage_page_can_add_a_standard_angle(self):
         goat = self.create_goat()

@@ -72,7 +72,7 @@ html.guided-camera-open body { overflow: hidden; overscroll-behavior: none; }
 .guided-camera-head h4 { margin: .2rem 0; }
 .guided-camera-head [data-camera-close] { flex: 0 0 44px; width: 44px; padding-inline: 0; }
 .guided-camera-dialog > p { color: var(--text-secondary); }
-.camera-frame { position: relative; overflow: hidden; background: #000; border-radius: var(--radius-md); aspect-ratio: 4 / 3; }
+.camera-frame { --camera-aspect: 4 / 3; --camera-ratio: 1.3333; position: relative; overflow: hidden; background: #000; border-radius: var(--radius-md); aspect-ratio: var(--camera-aspect); }
 .camera-frame video { width: 100%; height: 100%; display: block; object-fit: contain; }
 .camera-guide { position: absolute; inset: 8%; border: 2px dashed rgba(255, 255, 255, .8); border-radius: 1rem; pointer-events: none; }
 .guide-body { position: absolute; left: 16%; top: 33%; width: 66%; height: 42%; border: 3px solid rgba(255, 255, 255, .72); border-radius: 50% 48% 38% 40%; }
@@ -113,7 +113,7 @@ html.guided-camera-open body { overflow: hidden; overscroll-behavior: none; }
     .guided-camera-head { flex: 0 0 auto; }
     .guided-camera-head h4 { font-size: 1.1rem; }
     .guided-camera-dialog > p { flex: 0 0 auto; font-size: .82rem; line-height: 1.35; margin: .35rem 0 .6rem; }
-    .camera-frame { flex: 1 1 auto; min-height: 0; aspect-ratio: auto; border-radius: .65rem; }
+    .camera-frame { flex: 0 1 auto; align-self: center; width: 100%; max-width: min(100%, calc((100dvh - 12rem) * var(--camera-ratio))); max-height: calc(100dvh - 12rem); min-height: 0; aspect-ratio: var(--camera-aspect); margin-block: auto; border-radius: .65rem; }
     .photo-quality-message[data-camera-message] { flex: 0 0 auto; min-height: 1rem; margin-top: .35rem; }
     .guided-camera-actions { flex: 0 0 auto; display: grid; grid-template-columns: minmax(0, .7fr) minmax(0, 1.3fr); gap: .5rem; margin-top: .4rem; }
     .guided-camera-actions .btn { width: 100%; min-width: 0; min-height: 48px; padding-inline: .5rem; white-space: normal; }

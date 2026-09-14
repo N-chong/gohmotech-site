@@ -28,6 +28,7 @@
         const field = manager.querySelector('[data-captured-photos]');
         const camera = manager.querySelector('[data-guided-camera]');
         const video = manager.querySelector('[data-camera-video]');
+        const cameraFrame = manager.querySelector('.camera-frame');
         const canvas = manager.querySelector('[data-camera-canvas]');
         const title = manager.querySelector('[data-camera-title]');
         const guidance = manager.querySelector('[data-camera-guidance]');
@@ -35,6 +36,13 @@
         let stream = null;
         let activeAngle = null;
         let returnFocus = null;
+
+        function fitCameraFrame() {
+            if (!cameraFrame || !video.videoWidth || !video.videoHeight) return;
+            const ratio = video.videoWidth / video.videoHeight;
+            cameraFrame.style.setProperty('--camera-aspect', `${video.videoWidth} / ${video.videoHeight}`);
+            cameraFrame.style.setProperty('--camera-ratio', ratio.toFixed(4));
+        }
 
         function stopCamera() {
             if (stream) stream.getTracks().forEach((track) => track.stop());
@@ -128,6 +136,7 @@
                     camera.hidden = false;
                     document.documentElement.classList.add('guided-camera-open');
                     video.play().catch(() => {});
+                    fitCameraFrame();
                     manager.querySelector('[data-camera-shutter]').focus();
                 } catch (error) {
                     stopCamera();
@@ -162,6 +171,8 @@
         });
 
         manager.querySelectorAll('[data-camera-close]').forEach((button) => button.addEventListener('click', stopCamera));
+        video.addEventListener('loadedmetadata', fitCameraFrame);
+        window.addEventListener('orientationchange', fitCameraFrame);
         camera.addEventListener('keydown', (event) => {
             if (event.key === 'Escape') stopCamera();
         });
