@@ -34,12 +34,16 @@
         const cameraMessage = manager.querySelector('[data-camera-message]');
         let stream = null;
         let activeAngle = null;
+        let returnFocus = null;
 
         function stopCamera() {
             if (stream) stream.getTracks().forEach((track) => track.stop());
             stream = null;
             video.srcObject = null;
             camera.hidden = true;
+            document.documentElement.classList.remove('guided-camera-open');
+            if (returnFocus) returnFocus.focus();
+            returnFocus = null;
         }
 
         function setMessage(angle, message, success) {
@@ -100,6 +104,7 @@
 
         manager.querySelectorAll('[data-capture-angle]').forEach((button) => {
             button.addEventListener('click', async () => {
+                returnFocus = button;
                 activeAngle = button.dataset.captureAngle;
                 camera.dataset.angle = activeAngle;
                 const card = button.closest('[data-photo-card]');
@@ -117,7 +122,11 @@
                     });
                     video.srcObject = stream;
                     camera.hidden = false;
+                    document.documentElement.classList.add('guided-camera-open');
+                    video.play().catch(() => {});
+                    manager.querySelector('[data-camera-shutter]').focus();
                 } catch (error) {
+                    stopCamera();
                     setMessage(activeAngle, 'Camera unavailable. Use Upload to choose a photo instead.', false);
                 }
             });
@@ -146,6 +155,9 @@
         });
 
         manager.querySelectorAll('[data-camera-close]').forEach((button) => button.addEventListener('click', stopCamera));
+        camera.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') stopCamera();
+        });
         manager.querySelectorAll('[data-delete-image]').forEach((button) => {
             button.addEventListener('click', async () => {
                 if (!window.confirm('Delete this angle photo?')) return;
