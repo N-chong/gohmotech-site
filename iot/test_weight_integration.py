@@ -21,7 +21,7 @@ TEST_CACHES = {
 }
 
 
-@override_settings(CACHES=TEST_CACHES)
+@override_settings(CACHES=TEST_CACHES, IOT_DEVICE_API_KEY='test-scale-key')
 class GoatWeightIntegrationTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -43,7 +43,18 @@ class GoatWeightIntegrationTests(TestCase):
             url,
             data=json.dumps(payload),
             content_type='application/json',
+            HTTP_X_GOHMOTECH_DEVICE_KEY='test-scale-key',
         )
+
+    def test_scale_ingest_rejects_browser_session_without_device_key(self):
+        response = self.client.post(
+            reverse('iot:scale_reading_ingest'),
+            data=json.dumps(self.scale_payload()),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIsNone(cache.get('iot:scale:latest:kamotech_scale_esp32_001'))
 
     def scale_payload(self, weight=24.65, stable=True, detected=True, ready=True):
         return {

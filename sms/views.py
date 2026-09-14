@@ -8,9 +8,9 @@ Views for the SMS app.
   * sms_balance_api     — GET: provider credit balance (staff only).
   * sms_dashboard       — the tabbed SMS page (Settings / Reminders / Logs).
 
-Authorization reuses the existing Django auth system. Reads require an
-authenticated user; any change that could spend credits or alter configuration
-is restricted to staff. Provider credentials are never exposed by any endpoint.
+Authorization reuses the existing Django auth system. Operational settings,
+reminders, logs, and provider actions are staff-only. A separate view lets each
+authenticated marketplace user manage only their own SMS registration.
 """
 
 from django.conf import settings as django_settings
@@ -19,7 +19,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters, permissions, viewsets
+from rest_framework import filters, viewsets
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -34,14 +34,12 @@ from .serializers import (SmsLogSerializer, SmsReminderSerializer,
 
 
 class IsStaffOrReadOnly(IsAuthenticated):
-    """Authenticated users may read; only staff may create/update/delete."""
+    """SMS operational data and provider actions are staff-only."""
 
     def has_permission(self, request, view):
         base = super().has_permission(request, view)
         if not base:
             return False
-        if request.method in permissions.SAFE_METHODS:
-            return True
         return bool(request.user and request.user.is_staff)
 
 
@@ -67,7 +65,7 @@ class SmsLogViewSet(viewsets.ReadOnlyModelViewSet):
 
     queryset = SmsLog.objects.select_related('notification', 'reminder').all()
     serializer_class = SmsLogSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsStaffOrReadOnly]
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = {

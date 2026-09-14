@@ -21,6 +21,7 @@ django_asgi_app = get_asgi_application()
 
 # Import routing after Django is initialized
 from config import routing
+from config.websocket_access import FarmWebSocketAccess
 
 application = ProtocolTypeRouter({
     # HTTP requests handled by Django
@@ -29,9 +30,7 @@ application = ProtocolTypeRouter({
     # WebSocket requests handled by Channels
     "websocket": AllowedHostsOriginValidator(
         AuthMiddlewareStack(
-            URLRouter(
-                routing.websocket_urlpatterns
-            )
+            FarmWebSocketAccess(URLRouter(routing.websocket_urlpatterns))
         )
     ),
 })

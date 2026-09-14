@@ -7,7 +7,8 @@ from django.contrib.auth.models import Group, User
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
+from django.test.utils import CaptureQueriesContext
 from django.test import TestCase
 from django.test import override_settings
 from django.urls import reverse
@@ -482,6 +483,21 @@ class MarketplaceWorkflowTests(TestCase):
         response = self.client.get(reverse("marketplace:admin_dashboard"))
         self.assertEqual(response.status_code, 403)
 
+    def test_admin_dashboard_paginates_without_per_listing_queries(self):
+        for number in range(2, 29):
+            self._create_available_listing(f'GT-MKT-{number:03d}')
+        self.client.force_login(self.admin)
+
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(reverse('marketplace:admin_dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context['listings']), 25)
+        self.assertTrue(response.context['listing_page'].has_next())
+        # A prefetched image query and consolidated counts keep this independent
+        # of how many listing rows appear on the page.
+        self.assertLessEqual(len(queries), 20)
+
     def test_public_and_staff_pages_render(self):
         self.assertEqual(self.client.get(reverse("marketplace:landing")).status_code, 200)
         self.assertEqual(self.client.get(reverse("marketplace:list")).status_code, 200)
@@ -746,6 +762,23 @@ class MarketplaceWorkflowTests(TestCase):
         self.buyer.refresh_from_db()
         self.assertEqual(self.buyer.get_full_name(), "Community Owner")
 
+    def test_seller_application_rejects_document_with_spoofed_pdf_type(self):
+        self.client.force_login(self.buyer)
+        fake_pdf = SimpleUploadedFile(
+            'identity.pdf',
+            b'<script>alert(1)</script>',
+            content_type='application/pdf',
+        )
+
+        response = self.client.post(
+            reverse('marketplace:seller_application'),
+            self.seller_application_data(supporting_document=fake_pdf),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'does not match its file type')
+        self.assertFalse(SellerProfile.objects.filter(user=self.buyer).exists())
+
     def test_admin_cannot_open_or_post_seller_application(self):
         original_name = self.admin_seller_profile.farm_name
         self.client.force_login(self.admin)
@@ -899,7 +932,7 @@ class MarketplaceWorkflowTests(TestCase):
             {"action": "approve"},
         )
 
-        self.assertRedirects(response, reverse("marketplace:list"))
+        self.assertEqual(response.status_code, 403)
         profile.refresh_from_db()
         self.assertEqual(profile.status, SellerProfile.PENDING)
 

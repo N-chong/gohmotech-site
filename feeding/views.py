@@ -10,6 +10,7 @@ from .models import FeedSchedule, FeedLevel, FeedLog, AutomatedFeedingConfig
 from .serializers import (FeedScheduleSerializer, FeedLevelSerializer, 
                           FeedLogSerializer, AutomatedFeedingConfigSerializer)
 from iot.models import Device
+from iot.device_authentication import HasLegacyDeviceKey
 import logging
 
 logger = logging.getLogger(__name__)
@@ -66,6 +67,11 @@ class FeedLevelViewSet(viewsets.ModelViewSet):
     queryset = FeedLevel.objects.all()
     serializer_class = FeedLevelSerializer
     permission_classes = [FarmRolePermission]
+
+    def get_permissions(self):
+        if self.action == 'update_from_esp32':
+            return [HasLegacyDeviceKey()]
+        return super().get_permissions()
     
     @action(detail=True, methods=['post'])
     def refill(self, request, pk=None):
@@ -150,10 +156,10 @@ class FeedLevelViewSet(viewsets.ModelViewSet):
                 'is_low': feed_level.is_low
             })
             
-        except Exception as e:
-            logger.error(f"Error updating feed level from ESP32: {e}")
+        except Exception:
+            logger.exception("Error updating feed level from ESP32")
             return Response(
-                {'error': str(e)},
+                {'error': 'Feed-level update failed.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -167,10 +173,10 @@ class FeedLogViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         """
-        Allow unauthenticated access for ESP32 endpoints
+        Require the compatibility device key for existing ESP32 endpoints.
         """
         if self.action in ['servo_commands', 'servo_confirm', 'esp32_pending', 'confirm_executed', 'physical_button_feed']:
-            return []  # No authentication required for ESP32
+            return [HasLegacyDeviceKey()]
         return super().get_permissions()
     
     @action(detail=False, methods=['post'])
@@ -208,10 +214,10 @@ class FeedLogViewSet(viewsets.ModelViewSet):
                 {'error': 'Feeder not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        except Exception as e:
-            logger.error(f"Manual feed error: {e}")
+        except Exception:
+            logger.exception("Manual feed request failed")
             return Response(
-                {'error': str(e)},
+                {'error': 'Manual feed request failed.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -297,12 +303,12 @@ class FeedLogViewSet(viewsets.ModelViewSet):
                 'timestamp': pending_log.timestamp.isoformat()
             })
             
-        except Exception as e:
-            logger.error(f"Servo commands error: {e}")
+        except Exception:
+            logger.exception("Servo command lookup failed")
             return Response({
                 'has_command': False,
-                'error': str(e)
-            })
+                'error': 'Unable to retrieve pending commands.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=False, methods=['post'], url_path='servo-confirm')
     def servo_confirm(self, request):
@@ -338,10 +344,10 @@ class FeedLogViewSet(viewsets.ModelViewSet):
                 {'error': 'Feed log not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        except Exception as e:
-            logger.error(f"Servo confirm error: {e}")
+        except Exception:
+            logger.exception("Servo confirmation failed")
             return Response(
-                {'error': str(e)},
+                {'error': 'Unable to confirm the feed command.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -394,10 +400,10 @@ class FeedLogViewSet(viewsets.ModelViewSet):
                 {'error': 'Feeder not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        except Exception as e:
-            logger.error(f"Physical button feed error: {e}")
+        except Exception:
+            logger.exception("Physical button feed logging failed")
             return Response(
-                {'error': str(e)},
+                {'error': 'Unable to record the physical feed event.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

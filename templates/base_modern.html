@@ -8,6 +8,9 @@
     
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="{% static 'images/gohmotech-logo.png' %}">
+    <link rel="manifest" href="{% static 'manifest.webmanifest' %}">
+    <link rel="apple-touch-icon" href="{% static 'images/pwa/icon-192.png' %}">
+    <meta name="theme-color" content="#174f38">
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -428,5 +431,6 @@
     </script>
     
     {% block extra_js %}{% endblock %}
+    <script src="{% static 'js/pwa-register.js' %}" defer></script>
 </body>
 </html>

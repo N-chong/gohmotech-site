@@ -21,6 +21,9 @@ from django.conf.urls.static import static
 from allauth.account import views as account_views
 
 handler403 = 'dashboard.views.permission_denied_view'
+handler400 = 'dashboard.views.bad_request_view'
+handler404 = 'dashboard.views.not_found_view'
+handler500 = 'dashboard.views.server_error_view'
 
 urlpatterns = [
     # Admin panel

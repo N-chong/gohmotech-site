@@ -3,6 +3,8 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
+
+from marketplace.permissions import FarmRolePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -244,7 +246,7 @@ class BLEObservationAPIView(APIView):
 class BLETrackingSnapshotAPIView(APIView):
     """Session-authenticated live data for the tracking list and future radar."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [FarmRolePermission]
 
     def get(self, request):
         return Response(build_tracking_snapshot())

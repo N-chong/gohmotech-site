@@ -1230,24 +1230,48 @@ def reservation_action(request, pk):
 @staff_required
 def admin_dashboard(request):
     expire_due_reservations()
-    listings = _attach_images(
-        list(MarketplaceListing.objects.select_related("goat", "seller").all())
+    listing_queryset = MarketplaceListing.objects.select_related(
+        "goat", "seller"
+    ).prefetch_related(
+        Prefetch(
+            "goat__images",
+            queryset=GoatImage.objects.only(
+                "id", "goat_id", "image", "uploaded_at"
+            ).order_by("-uploaded_at"),
+            to_attr="marketplace_images",
+        )
     )
-    reservations = Reservation.objects.select_related(
+    listing_page = Paginator(listing_queryset, 25).get_page(
+        request.GET.get("listings_page")
+    )
+    listings = _attach_images(list(listing_page.object_list))
+
+    reservation_queryset = Reservation.objects.select_related(
         "listing__goat", "listing__seller", "buyer"
     ).filter(status__in=[Reservation.PENDING, Reservation.ACCEPTED])
+    reservation_counts = reservation_queryset.aggregate(
+        reserved=Count("id", filter=Q(status=Reservation.ACCEPTED)),
+        pending=Count("id", filter=Q(status=Reservation.PENDING)),
+    )
+    reservation_page = Paginator(reservation_queryset, 25).get_page(
+        request.GET.get("reservations_page")
+    )
+    listing_counts = MarketplaceListing.objects.aggregate(
+        available=Count("id", filter=Q(status=MarketplaceListing.AVAILABLE)),
+        sold=Count("id", filter=Q(status=MarketplaceListing.SOLD)),
+    )
     return render(
         request,
         "marketplace/admin_dashboard.html",
         {
             "listings": listings,
-            "reservations": reservations,
-            "available_count": MarketplaceListing.objects.filter(status="available").count(),
-            "reserved_count": reservations.filter(status=Reservation.ACCEPTED).count(),
-            "pending_reservation_count": reservations.filter(
-                status=Reservation.PENDING
-            ).count(),
-            "sold_count": MarketplaceListing.objects.filter(status="sold").count(),
+            "listing_page": listing_page,
+            "reservations": reservation_page.object_list,
+            "reservation_page": reservation_page,
+            "available_count": listing_counts["available"],
+            "reserved_count": reservation_counts["reserved"],
+            "pending_reservation_count": reservation_counts["pending"],
+            "sold_count": listing_counts["sold"],
             "inquiry_count": Conversation.objects.count(),
             "pending_seller_count": SellerProfile.objects.filter(
                 status=SellerProfile.PENDING,

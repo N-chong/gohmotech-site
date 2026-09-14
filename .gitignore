@@ -12,6 +12,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
+.venv/
 env/
 venv/
 ENV/
@@ -36,11 +37,37 @@ wheels/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+*.sqlite
+*.sqlite3
+*.sqlite3-journal
+*.db
+*.db-journal
 /media
 /private_support_uploads
 /protected_media
 /staticfiles
 /tmp
+
+# Local backups, credentials, and private keys
+/backups/
+*.bak
+*.backup
+*.dump
+*.sql
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+id_rsa
+id_ed25519
+
+# JavaScript dependencies and generated caches
+node_modules/
+.cache/
+*.tmp
+*.temp
 
 # Local tool state and test caches
 /.claude
@@ -54,6 +81,7 @@ htmlcov/
 # IDE
 .vscode/
 .idea/
+*.code-workspace
 *.swp
 *.swo
 *~
@@ -67,3 +95,6 @@ Thumbs.db
 *.h5
 *.pb
 models/*.joblib
+
+# Legacy local sketch containing machine-specific database setup
+/esp32 autofeeder/8398yeiuhdakj.ino

@@ -1,7 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.exceptions import ValidationError as ApiValidationError
 from marketplace.auth import is_admin
 from marketplace.decorators import farm_access_required, farm_owner_required, staff_required
 from marketplace.permissions import FarmRolePermission, IsAdmin, IsFarmOwnerOrAdmin
@@ -27,6 +27,19 @@ from .weather_service import get_farm_weather
 from .status_utils import (
     is_device_online, controller_status, system_status,
 )
+from .device_authentication import HasLegacyDeviceKey
+
+
+def _bounded_hours(request, default=24, maximum=168):
+    """Parse a bounded history window without allowing 500s or unbounded reads."""
+    raw_value = request.query_params.get('hours', default)
+    try:
+        hours = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise ApiValidationError({'hours': 'Enter a whole number of hours.'}) from exc
+    if not 1 <= hours <= maximum:
+        raise ApiValidationError({'hours': f'Hours must be between 1 and {maximum}.'})
+    return hours
 
 try:
     from .goat_models import Goat, GoatImage, GoatBehaviorLog, GrassHealthLog, IPCamera
@@ -60,13 +73,13 @@ class DeviceViewSet(viewsets.ModelViewSet):
     def recent_data(self, request, pk=None):
         """Get recent sensor data for a device"""
         device = self.get_object()
-        hours = int(request.query_params.get('hours', 24))
+        hours = _bounded_hours(request)
         since = timezone.now() - timedelta(hours=hours)
         
         data = SensorData.objects.filter(
             device=device,
             timestamp__gte=since
-        )
+        ).order_by('-timestamp')[:1000]
         serializer = SensorDataSerializer(data, many=True)
         return Response(serializer.data)
 
@@ -132,9 +145,9 @@ class SensorReadingViewSet(viewsets.ModelViewSet):
     filterset_fields = ['device', 'timestamp']
     
     def get_permissions(self):
-        """Allow unauthenticated POST for ESP32 devices, require auth for other methods"""
+        """Require the device key for ESP32 writes and farm RBAC for reads."""
         if self.action == 'create':
-            return [AllowAny()]
+            return [HasLegacyDeviceKey()]
         return [FarmRolePermission()]
     
     def create(self, request, *args, **kwargs):
@@ -175,7 +188,7 @@ class SensorReadingViewSet(viewsets.ModelViewSet):
     def device_history(self, request):
         """Get sensor reading history for a specific device"""
         device_id = request.query_params.get('device_id')
-        hours = int(request.query_params.get('hours', 24))
+        hours = _bounded_hours(request)
         
         if not device_id:
             return Response({"error": "device_id parameter required"}, status=400)
@@ -189,7 +202,7 @@ class SensorReadingViewSet(viewsets.ModelViewSet):
         readings = SensorReading.objects.filter(
             device=device,
             timestamp__gte=since
-        ).order_by('-timestamp')
+        ).order_by('-timestamp')[:1000]
         
         serializer = self.get_serializer(readings, many=True)
         return Response(serializer.data)
@@ -1167,10 +1180,10 @@ class ActuatorStateViewSet(viewsets.ModelViewSet):
     permission_classes = [FarmRolePermission]
     
     def get_permissions(self):
-        """Allow unauthenticated GET/POST for ESP32, require auth for other methods"""
+        """Keep legacy ESP32 actions separate; enforce farm RBAC everywhere else."""
         if self.action in ['esp32_commands', 'esp32_sync_state']:
-            return [AllowAny()]
-        return [IsAuthenticated()]
+            return [HasLegacyDeviceKey()]
+        return super().get_permissions()
     
     @action(detail=False, methods=['get'])
     def esp32_status(self, request):
@@ -1213,7 +1226,9 @@ class ActuatorStateViewSet(viewsets.ModelViewSet):
         """
         actuator = self.get_object()
         new_state = request.data.get('state')
-        triggered_by = request.data.get('triggered_by', 'API User')
+        # Actor identity is authoritative server-side; never accept an
+        # impersonable username from the browser.
+        triggered_by = request.user.get_username()
 
         if new_state not in ['on', 'off', 'open', 'closed']:
             return Response(
@@ -1275,7 +1290,7 @@ class ActuatorStateViewSet(viewsets.ModelViewSet):
             except Exception:
                 pass
             return Response(
-                {'error': 'Failed to update actuator state', 'detail': str(e)},
+                {'error': 'Failed to update actuator state'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -1299,7 +1314,7 @@ class ActuatorStateViewSet(viewsets.ModelViewSet):
         })
 
     
-    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
+    @action(detail=False, methods=['get'])
     def esp32_commands(self, request):
         """
         ESP32 polls this endpoint to get actuator commands
@@ -1341,7 +1356,7 @@ class ActuatorStateViewSet(viewsets.ModelViewSet):
             'timestamp': timezone.now().isoformat()
         })
     
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    @action(detail=False, methods=['post'])
     def esp32_sync_state(self, request):
         """
         ESP32 sends physical button state changes here to sync with Django
@@ -1493,17 +1508,20 @@ class ActuationLogViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """Get actuation statistics"""
-        hours = int(request.query_params.get('hours', 24))
+        hours = _bounded_hours(request)
         since = timezone.now() - timedelta(hours=hours)
         
         logs = self.queryset.filter(timestamp__gte=since)
         
+        counts = logs.aggregate(
+            total_actions=Count('id'),
+            manual_actions=Count('id', filter=Q(source='manual')),
+            automated_actions=Count('id', filter=Q(source='rule')),
+            successful_actions=Count('id', filter=Q(result='success')),
+            failed_actions=Count('id', filter=Q(result='failed')),
+        )
         return Response({
-            'total_actions': logs.count(),
-            'manual_actions': logs.filter(source='manual').count(),
-            'automated_actions': logs.filter(source='rule').count(),
-            'successful_actions': logs.filter(result='success').count(),
-            'failed_actions': logs.filter(result='failed').count(),
+            **counts,
             'time_range_hours': hours
         })
 
@@ -1968,13 +1986,11 @@ def api_create_schedule(request):
                 'rule_id': rule.id
             })
         
-    except Exception as e:
-        import traceback
-        logger.error(f"Error creating schedule: {str(e)}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
+    except Exception:
+        logger.exception("Error creating schedule")
         return JsonResponse({
             'status': 'error',
-            'message': f'{type(e).__name__}: {str(e)}'
+            'message': 'Unable to create the schedule.'
         }, status=500)
 
 
@@ -2059,11 +2075,11 @@ def api_create_rule(request):
             'status': 'error',
             'message': 'Device not found'
         }, status=404)
-    except Exception as e:
-        logger.error(f"Error creating rule: {str(e)}")
+    except Exception:
+        logger.exception("Error creating rule")
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Unable to create the automation rule.'
         }, status=500)
 
 
@@ -2123,11 +2139,11 @@ def api_toggle_automation(request):
             'message': f"Automation {'enabled' if enabled else 'disabled'}",
             'enabled': enabled
         })
-    except Exception as e:
-        logger.error(f"Error toggling automation: {str(e)}")
+    except Exception:
+        logger.exception("Error toggling automation")
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Unable to update automation.'
         }, status=500)
 
 
@@ -2168,11 +2184,11 @@ def api_update_schedule(request, schedule_id):
             'status': 'error',
             'message': 'Schedule not found'
         }, status=404)
-    except Exception as e:
-        logger.error(f"Error updating schedule: {str(e)}")
+    except Exception:
+        logger.exception("Error updating schedule")
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Unable to update the schedule.'
         }, status=500)
 
 
@@ -2207,9 +2223,9 @@ def api_update_rule(request, rule_id):
             'status': 'error',
             'message': 'Rule not found'
         }, status=404)
-    except Exception as e:
-        logger.error(f"Error updating rule: {str(e)}")
+    except Exception:
+        logger.exception("Error updating rule")
         return JsonResponse({
             'status': 'error',
-            'message': str(e)
+            'message': 'Unable to update the automation rule.'
         }, status=500)

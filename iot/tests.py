@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 
@@ -19,7 +19,31 @@ from .models import (
 )
 
 
+@override_settings(IOT_DEVICE_API_KEY="test-device-key")
 class IndoorEnvironmentSensorApiTests(TestCase):
+    headers = {"HTTP_X_GOHMOTECH_DEVICE_KEY": "test-device-key"}
+
+    def test_upload_requires_device_credentials(self):
+        response = APIClient().post(
+            "/iot/api/sensor-readings/",
+            {"device_id": "unauthorized_sensor", "temperature": 29.4},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(Device.objects.filter(device_id="unauthorized_sensor").exists())
+
+    def test_upload_rejects_invalid_device_credentials(self):
+        response = APIClient().post(
+            "/iot/api/sensor-readings/",
+            {"device_id": "unauthorized_sensor", "temperature": 29.4},
+            format="json",
+            HTTP_X_GOHMOTECH_DEVICE_KEY="wrong-key",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(Device.objects.filter(device_id="unauthorized_sensor").exists())
+
     def test_esp32_can_upload_light_and_mq135_readings(self):
         response = APIClient().post(
             "/iot/api/sensor-readings/",
@@ -35,6 +59,7 @@ class IndoorEnvironmentSensorApiTests(TestCase):
                 "air_quality_calibrated": False,
             },
             format="json",
+            **self.headers,
         )
 
         self.assertEqual(response.status_code, 201, response.data)
@@ -54,6 +79,7 @@ class IndoorEnvironmentSensorApiTests(TestCase):
                 "air_quality_raw": 5000,
             },
             format="json",
+            **self.headers,
         )
 
         self.assertEqual(response.status_code, 400)

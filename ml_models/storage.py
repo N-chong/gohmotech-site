@@ -12,7 +12,9 @@ from django.conf import settings
 from django.core.files.storage import FileSystemStorage
 
 # A dedicated location, deliberately NOT under MEDIA_ROOT.
-PROTECTED_MODELS_ROOT = settings.BASE_DIR / 'protected_media' / 'ml_models'
+PROTECTED_MODELS_ROOT = getattr(
+    settings, 'PROTECTED_MODELS_ROOT', settings.BASE_DIR / 'protected_media' / 'ml_models'
+)
 
 
 class ProtectedModelStorage(FileSystemStorage):

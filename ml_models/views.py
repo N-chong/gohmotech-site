@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes as api_permission_classes
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError as ApiValidationError
 from rest_framework.permissions import IsAuthenticated
 from marketplace.decorators import farm_access_required, farm_owner_required, staff_required
 from marketplace.permissions import FarmRolePermission, IsAdmin, IsFarmOwnerOrAdmin
@@ -30,6 +31,17 @@ except ImportError:
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _bounded_hours(request, default=24, maximum=168):
+    raw_value = request.query_params.get('hours', default)
+    try:
+        hours = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise ApiValidationError({'hours': 'Enter a whole number of hours.'}) from exc
+    if not 1 <= hours <= maximum:
+        raise ApiValidationError({'hours': f'Hours must be between 1 and {maximum}.'})
+    return hours
 
 # Per-category detector cache (lazy loaded).
 # Maps category -> {'key': (model_id, updated_at_ts), 'detector': obj}. Keying on
@@ -579,27 +591,29 @@ class DetectionViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def recent(self, request):
         """Get recent detections"""
-        hours = int(request.query_params.get('hours', 24))
+        hours = _bounded_hours(request)
         since = timezone.now() - timedelta(hours=hours)
         
-        detections = Detection.objects.filter(timestamp__gte=since)
+        detections = Detection.objects.filter(timestamp__gte=since).order_by('-timestamp')[:500]
         serializer = self.get_serializer(detections, many=True)
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """Get detection statistics"""
-        hours = int(request.query_params.get('hours', 24))
+        hours = _bounded_hours(request)
         since = timezone.now() - timedelta(hours=hours)
         
         detections = Detection.objects.filter(timestamp__gte=since)
         
-        stats = {
-            'total_detections': detections.count(),
-            'total_goats': sum(d.goat_count for d in detections),
-            'average_confidence': detections.aggregate(avg_conf=models.Avg('confidence'))['avg_conf'] or 0,
-            'cameras_active': detections.values('camera').distinct().count()
-        }
+        stats = detections.aggregate(
+            total_detections=models.Count('id'),
+            total_goats=models.Sum('goat_count'),
+            average_confidence=models.Avg('confidence'),
+            cameras_active=models.Count('camera', distinct=True),
+        )
+        stats['total_goats'] = stats['total_goats'] or 0
+        stats['average_confidence'] = stats['average_confidence'] or 0
         
         return Response(stats)
 
@@ -776,10 +790,10 @@ def detect_goats_api(request):
 
         return Response(response_data)
         
-    except Exception as e:
-        logger.error(f"Detection error: {e}", exc_info=True)
+    except Exception:
+        logger.exception("Detection request failed")
         return Response(
-            {'error': str(e)}, 
+            {'error': 'Detection could not be completed.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -883,13 +897,13 @@ def test_recognition_api(request):
             'annotated_preview': _encode_image_to_data_url(overlay_image),
         })
 
-    except Exception as e:
-        logger.error(f"Test recognition error: {e}", exc_info=True)
+    except Exception:
+        logger.exception("Test recognition request failed")
         return Response({
             'processing_status': 'failed',
             'detection_status': 'Failed',
             'recognition_status': 'failed',
-            'error': str(e),
+            'error': 'Recognition could not be completed.',
             'detections': [],
             'source_frame': '',
             'annotated_preview': '',

@@ -1,10 +1,30 @@
+from pathlib import Path
+
+from django.conf import settings
+from django.http import FileResponse, Http404
+from django.http import HttpResponse
 from django.shortcuts import render, redirect
+from django.template.loader import get_template
+from django.views.decorators.cache import never_cache
+from django.views.decorators.http import require_safe
 from django.db.models import Count
 from iot.models import Device
 from ml_models.models import Detection
 from feeding.models import FeedLog
 from marketplace.auth import has_farm_access
 from marketplace.decorators import farm_access_required
+
+
+@require_safe
+@never_cache
+def service_worker(request):
+    """Serve the worker at the origin root so it can control the whole PWA."""
+    worker = Path(settings.BASE_DIR) / "static" / "js" / "service-worker.js"
+    if not worker.is_file():
+        raise Http404
+    response = FileResponse(worker.open("rb"), content_type="text/javascript; charset=utf-8")
+    response["Service-Worker-Allowed"] = "/"
+    return response
 
 
 def dashboard_home_view(request):
@@ -18,8 +38,31 @@ def dashboard_home_view(request):
     return redirect('/iot/owner/')
 
 
+def _safe_error_response(status, title, message):
+    # Render without a RequestContext. Error pages must still work when a
+    # database-backed context processor is the component that failed.
+    html = get_template('error.html').render({
+        'status_code': status,
+        'error_title': title,
+        'error_message': message,
+    })
+    return HttpResponse(html, status=status)
+
+
+def bad_request_view(request, exception=None):
+    return _safe_error_response(400, 'Request not accepted', 'Check the submitted information and try again.')
+
+
 def permission_denied_view(request, exception=None):
-    return render(request, '403.html', status=403)
+    return _safe_error_response(403, 'Access denied', 'Your account does not have permission to open this resource.')
+
+
+def not_found_view(request, exception=None):
+    return _safe_error_response(404, 'Page not found', 'The requested page may have moved or may not be available to your account.')
+
+
+def server_error_view(request):
+    return _safe_error_response(500, 'GoHMoTech is temporarily unavailable', 'No data was changed. Please try again in a moment.')
 
 
 @farm_access_required

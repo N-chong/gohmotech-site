@@ -1,0 +1,23 @@
+[Unit]
+Description=GoHMoTech production ASGI application
+After=network.target mariadb.service redis-server.service
+
+[Service]
+Type=simple
+User=gohmotech
+Group=gohmotech
+WorkingDirectory=/home/gohmotech/capstone
+Environment=DJANGO_SETTINGS_MODULE=config.production
+Environment=PRODUCTION_ENV_FILE=/home/gohmotech/.config/gohmotech/production.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/gohmotech/capstone/.venv/bin/daphne --bind 127.0.0.1 --port 8010 config.asgi:application
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

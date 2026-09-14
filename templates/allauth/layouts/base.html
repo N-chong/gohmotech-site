@@ -1,0 +1,44 @@
+{% load i18n static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Secure GoHMoTech account access and recovery.">
+  <title>{% block head_title %}Account{% endblock head_title %} | GoHMoTech</title>
+  <link rel="icon" type="image/png" href="{% static 'images/gohmotech-logo.png' %}">
+  <link rel="manifest" href="{% static 'manifest.webmanifest' %}">
+  <link rel="apple-touch-icon" href="{% static 'images/pwa/icon-192.png' %}">
+  <meta name="theme-color" content="#174f38">
+  <style>
+    :root{--ink:#17231b;--muted:#68736c;--forest:#174f38;--leaf:#2f7d56;--cream:#f6f5ef;--line:#dce3dc;--danger:#9f302b}*{box-sizing:border-box}html,body{min-height:100%;margin:0}body{background:radial-gradient(circle at 8% 5%,rgba(207,233,157,.55),transparent 20rem),radial-gradient(circle at 95% 90%,rgba(47,125,86,.14),transparent 24rem),var(--cream);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}a{color:var(--leaf);font-weight:650}.account-shell{width:min(100% - 32px,680px);margin:0 auto;padding:44px 0}.account-brand{display:flex;align-items:center;justify-content:center;gap:11px;margin-bottom:22px;color:var(--forest);text-decoration:none}.account-brand img{width:45px;height:45px;padding:5px;border:1px solid var(--line);border-radius:13px;background:#fff}.account-brand strong,.account-brand small{display:block}.account-brand strong{font-size:20px;line-height:1}.account-brand small{margin-top:4px;color:var(--muted);font-size:10px;letter-spacing:.12em;text-transform:uppercase}.account-card{padding:clamp(25px,6vw,44px);border:1px solid rgba(23,79,56,.13);border-radius:24px;background:rgba(255,255,255,.96);box-shadow:0 24px 65px rgba(23,55,37,.12)}.account-card h1{margin:0 0 10px;font-size:clamp(27px,6vw,38px);line-height:1.15;letter-spacing:-.035em}.account-card h2{margin-top:24px}.account-card>p{color:var(--muted)}.account-card form p{margin:17px 0}.account-card label{display:block;margin-bottom:7px;font-size:13px;font-weight:750}.account-card input:not([type=checkbox]):not([type=radio]),.account-card textarea,.account-card select{width:100%;min-height:50px;padding:11px 13px;border:1.5px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);font:inherit;outline:none}.account-card textarea{min-height:110px}.account-card input:focus,.account-card textarea:focus,.account-card select:focus{border-color:var(--leaf);box-shadow:0 0 0 4px rgba(47,125,86,.13)}.account-card button,.account-card a[role=button]{display:inline-flex;min-height:47px;align-items:center;justify-content:center;padding:0 18px;border:0;border-radius:12px;background:linear-gradient(135deg,var(--forest),var(--leaf));color:#fff;text-decoration:none;font:inherit;font-weight:750;cursor:pointer}.account-card ul.errorlist{margin:6px 0;padding:10px 13px;border:1px solid #f1cbc7;border-radius:10px;background:#fff0ee;color:var(--danger);list-style:none}.account-messages{margin:0 0 16px;padding:0;list-style:none}.account-messages li{margin-bottom:8px;padding:11px 13px;border:1px solid #d1e6d9;border-radius:10px;background:#eef6f1;color:var(--forest)}.account-menu{display:flex;flex-wrap:wrap;justify-content:center;gap:8px 16px;margin:20px 0 0;padding:0;list-style:none}.account-menu a{font-size:12px}.privacy-note{display:flex;gap:8px;margin-top:22px;padding-top:17px;border-top:1px solid var(--line);color:var(--muted);font-size:11px}.back-link{display:block;margin-top:18px;text-align:center;font-size:12px}@media(max-width:520px){.account-shell{width:min(100% - 20px,680px);padding:18px 0 28px}.account-brand{justify-content:flex-start;margin:0 7px 16px}.account-card{padding:25px 18px;border-radius:19px}.account-card button{width:100%}.account-menu{gap:8px 12px}}
+  </style>
+  {% block extra_head %}{% endblock extra_head %}
+</head>
+<body>
+{% block body %}
+  <main class="account-shell">
+    <a class="account-brand" href="{% url 'marketplace:landing' %}"><img src="{% static 'images/gohmotech-logo.png' %}" alt=""><span><strong>GoHMoTech</strong><small>Secure account center</small></span></a>
+    <section class="account-card">
+      {% if messages %}<ul class="account-messages" aria-live="polite">{% for message in messages %}<li>{{ message }}</li>{% endfor %}</ul>{% endif %}
+      {% block content %}{% endblock content %}
+      <div class="privacy-note"><span aria-hidden="true">&#128274;</span><span>Account and recovery pages always use a live secure connection. GoHMoTech does not store these pages for offline use.</span></div>
+    </section>
+    <ul class="account-menu">
+      {% if user.is_authenticated %}
+        <li><a href="{% url 'marketplace:landing' %}">Marketplace</a></li>
+        {% url 'account_email' as email_url %}{% if email_url %}<li><a href="{{ email_url }}">Email settings</a></li>{% endif %}
+        {% url 'account_change_password' as password_url %}{% if password_url %}<li><a href="{{ password_url }}">Change password</a></li>{% endif %}
+        <li><a href="{% url 'account_logout' %}">Sign out</a></li>
+      {% else %}
+        <li><a href="{% url 'account_login' %}">Sign in</a></li>
+        <li><a href="{% url 'account_signup' %}">Create account</a></li>
+        <li><a href="{% url 'marketplace:landing' %}">Browse marketplace</a></li>
+      {% endif %}
+    </ul>
+  </main>
+{% endblock body %}
+{% block extra_body %}{% endblock extra_body %}
+<script src="{% static 'js/pwa-register.js' %}" defer></script>
+</body>
+</html>

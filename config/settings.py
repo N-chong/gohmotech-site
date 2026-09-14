@@ -15,8 +15,11 @@ pymysql.install_as_MySQLdb()
 # Patch version check for Django compatibility
 pymysql.version_info = (2, 2, 4, "final", 0)
 
-# Load environment variables
-load_dotenv()
+# Development settings may use the project-local .env. Hardened deployment
+# modules load their explicit private environment first and set this guard so
+# unrelated development credentials cannot leak into the live process.
+if os.environ.get('DJANGO_SKIP_PROJECT_DOTENV') != '1':
+    load_dotenv()
 
 # Apply Python 3.14 compatibility patch for Django admin
 if sys.version_info >= (3, 14):
@@ -48,7 +51,10 @@ if DEBUG:
 else:
     ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
-
+CSRF_TRUSTED_ORIGINS = [
+    'https://gohmotech.site',
+    'https://www.gohmotech.site',
+]
 # Application definition
 
 INSTALLED_APPS = [
@@ -334,6 +340,10 @@ MQTT_BROKER_HOST = os.getenv('MQTT_BROKER_HOST', 'localhost')
 MQTT_BROKER_PORT = int(os.getenv('MQTT_BROKER_PORT', '1883'))
 MQTT_USERNAME = os.getenv('MQTT_USERNAME', '')
 MQTT_PASSWORD = os.getenv('MQTT_PASSWORD', '')
+
+# Interim authentication for legacy ESP32 HTTP endpoints. Leave empty to deny
+# every device request; do not reuse a Wi-Fi, database, MQTT, or Django secret.
+IOT_DEVICE_API_KEY = os.getenv('IOT_DEVICE_API_KEY', '').strip()
 
 # Weather Configuration (Open-Meteo, free/no API key)
 WEATHER_ENABLED = os.getenv('WEATHER_ENABLED', 'True') == 'True'

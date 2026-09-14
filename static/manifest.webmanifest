@@ -1,0 +1,31 @@
+{
+  "id": "/marketplace/",
+  "name": "GoHMoTech Smart Goat House",
+  "short_name": "GoHMoTech",
+  "description": "Smart goat-house monitoring and community goat marketplace.",
+  "start_url": "/marketplace/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f5ef",
+  "theme_color": "#174f38",
+  "icons": [
+    {
+      "src": "/static/images/pwa/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/images/pwa/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/images/pwa/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

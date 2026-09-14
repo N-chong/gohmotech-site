@@ -9,7 +9,7 @@ from django.core.exceptions import PermissionDenied
 from django.core.cache import cache
 from django.db import transaction
 from django.db.utils import IntegrityError
-from django.db.models import Q, Avg
+from django.db.models import Q, Avg, Prefetch
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.http import JsonResponse
@@ -22,12 +22,16 @@ import logging
 import math
 import uuid
 
+from PIL import Image, UnidentifiedImageError
+from marketplace.image_utils import optimize_marketplace_image
+
 logger = logging.getLogger(__name__)
 
 from .goat_models import (
     Goat, GoatWeightMeasurement, GoatImage, GoatDetectionHistory, MissingGoatAlert
 )
 from .forms import BLEBeaconForm, GoatForm
+from .device_authentication import device_key_required
 from marketplace.decorators import farm_access_required, farm_owner_required
 from marketplace.auth import can_manage_farm
 
@@ -37,6 +41,35 @@ SCALE_CACHE_TTL_SECONDS = 15
 SCALE_OFFLINE_AFTER_SECONDS = 5
 MIN_GOAT_WEIGHT_KG = Decimal('0.10')
 MAX_GOAT_WEIGHT_KG = Decimal('300.00')
+MAX_GOAT_IMAGE_BYTES = 5 * 1024 * 1024
+MAX_GOAT_IMAGE_PIXELS = 25_000_000
+
+
+def _validated_goat_image(upload):
+    """Verify and normalize a farm image before it reaches public media."""
+    if not upload or getattr(upload, 'size', 0) > MAX_GOAT_IMAGE_BYTES:
+        raise ValidationError('Goat photos must be 5 MB or smaller.')
+    content_type = (getattr(upload, 'content_type', '') or '').lower()
+    if content_type not in {'image/jpeg', 'image/png', 'image/webp'}:
+        raise ValidationError('Upload a valid JPG, PNG, or WebP image.')
+    try:
+        upload.seek(0)
+        with Image.open(upload) as candidate:
+            width, height = candidate.size
+            if width * height > MAX_GOAT_IMAGE_PIXELS:
+                raise ValidationError('Goat photos must be 25 megapixels or smaller.')
+            candidate.verify()
+        upload.seek(0)
+        return optimize_marketplace_image(upload)
+    except ValidationError:
+        raise
+    except (OSError, ValueError, UnidentifiedImageError) as exc:
+        raise ValidationError('The selected goat photo could not be verified.') from exc
+    finally:
+        try:
+            upload.seek(0)
+        except (AttributeError, OSError):
+            pass
 
 
 def _scale_cache_key(device_id=SCALE_DEVICE_ID):
@@ -110,6 +143,7 @@ def _measurement_payload(measurement, duplicate=False):
 
 
 @csrf_exempt
+@device_key_required
 @require_POST
 def scale_reading_ingest(request):
     """Receive one transient HX711 snapshot without creating history records."""
@@ -264,8 +298,15 @@ def _save_data_url_image(goat, data_url, image_type='identification',
             encoded = data_url
             ext = 'jpg'
 
-        image_data = base64.b64decode(encoded)
+        image_data = base64.b64decode(encoded, validate=True)
+        if len(image_data) > MAX_GOAT_IMAGE_BYTES:
+            raise ValidationError('Captured goat photos must be 5 MB or smaller.')
         file_name = f"{goat.goat_id}_{uuid.uuid4().hex[:8]}.{ext}"
+        upload = ContentFile(image_data, name=file_name)
+        upload.content_type = 'image/png' if ext == 'png' else (
+            'image/webp' if ext == 'webp' else 'image/jpeg'
+        )
+        normalized = _validated_goat_image(upload)
 
         goat_image = GoatImage(
             goat=goat,
@@ -274,7 +315,7 @@ def _save_data_url_image(goat, data_url, image_type='identification',
             } else 'identification',
             description=description,
         )
-        goat_image.image.save(file_name, ContentFile(image_data), save=True)
+        goat_image.image.save(normalized.name, normalized, save=True)
         return goat_image
     except Exception as exc:
         logger.error(f"Failed to save captured photo for {goat.goat_id}: {exc}")
@@ -293,7 +334,13 @@ def goat_inventory(request):
     search_query = request.GET.get('search', '')
 
     # Base queryset for inventory
-    goats = Goat.objects.select_related('ble_beacon')
+    goats = Goat.objects.select_related('ble_beacon').prefetch_related(
+        Prefetch(
+            'images',
+            queryset=GoatImage.objects.order_by('-uploaded_at'),
+            to_attr='inventory_images',
+        )
+    )
 
     # Apply status filter
     if status_filter != 'all':
@@ -310,7 +357,7 @@ def goat_inventory(request):
 
     # Attach cover image for each goat (newest image acts as the cover)
     for goat in goats:
-        goat.latest_image = GoatImage.objects.filter(goat=goat).order_by('-uploaded_at').first()
+        goat.latest_image = goat.inventory_images[0] if goat.inventory_images else None
 
     # Statistics
     total_goats = Goat.objects.count()
@@ -377,16 +424,20 @@ def goat_detail_enhanced(request, goat_id):
                                 description='Captured via camera',
                             )
 
-                # Save any uploaded image files (multiple supported).
+                # Save verified, normalized uploads only. Browser MIME claims
+                # are not trusted and executable/polyglot tails are discarded.
                 for image_file in request.FILES.getlist('images'):
-                    content_type = getattr(image_file, 'content_type', '') or ''
-                    if content_type.startswith('image/'):
-                        GoatImage.objects.create(
-                            goat=updated,
-                            image=image_file,
-                            image_type='identification',
-                            description='Uploaded via manage page',
-                        )
+                    try:
+                        normalized = _validated_goat_image(image_file)
+                    except ValidationError as exc:
+                        messages.error(request, exc.messages[0])
+                        continue
+                    GoatImage.objects.create(
+                        goat=updated,
+                        image=normalized,
+                        image_type='identification',
+                        description='Uploaded via manage page',
+                    )
 
             messages.success(request, f'Changes saved for {updated.goat_id}.')
             return redirect('iot:goat_detail_enhanced', goat_id=updated.goat_id)
@@ -466,14 +517,15 @@ def upload_goat_image(request, goat_id):
     if image_type not in valid_image_types:
         image_type = 'identification'
 
-    content_type = getattr(image_file, 'content_type', '') or ''
-    if not content_type.startswith('image/'):
-        messages.error(request, 'Only image files are allowed.')
+    try:
+        normalized = _validated_goat_image(image_file)
+    except ValidationError as exc:
+        messages.error(request, exc.messages[0])
         return redirect('goat_detail_enhanced', goat_id=goat_id)
 
     GoatImage.objects.create(
         goat=goat,
-        image=image_file,
+        image=normalized,
         image_type=image_type,
         description=description,
         is_training_data=is_training_data,
@@ -633,7 +685,11 @@ def detection_history(request):
     Phase 5: Detection timeline
     """
     # Get filter parameters
-    hours = int(request.GET.get('hours', '24'))
+    try:
+        hours = int(request.GET.get('hours', '24'))
+    except (TypeError, ValueError):
+        hours = 24
+    hours = min(max(hours, 1), 168)
     camera_id = request.GET.get('camera', 'all')
     goat_id = request.GET.get('goat', 'all')
     

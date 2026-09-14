@@ -143,6 +143,29 @@ class SellerApplicationForm(forms.ModelForm):
             )
         return cleaned_data
 
+    def clean_supporting_document(self):
+        upload = self.cleaned_data.get('supporting_document')
+        if not upload or not hasattr(upload, 'content_type'):
+            return upload
+
+        content_type = (upload.content_type or '').lower()
+        signatures = {
+            'application/pdf': (b'%PDF-',),
+            'image/jpeg': (b'\xff\xd8\xff',),
+            'image/png': (b'\x89PNG\r\n\x1a\n',),
+        }
+        allowed_signatures = signatures.get(content_type)
+        if not allowed_signatures:
+            raise ValidationError('Upload a valid PDF, JPG, or PNG document.')
+        try:
+            upload.seek(0)
+            header = upload.read(8)
+        finally:
+            upload.seek(0)
+        if not any(header.startswith(signature) for signature in allowed_signatures):
+            raise ValidationError('The document content does not match its file type.')
+        return upload
+
     def save(self, commit=True):
         profile = super().save(commit=False)
         profile.user = self.user

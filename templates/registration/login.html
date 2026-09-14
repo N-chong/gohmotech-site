@@ -7,6 +7,9 @@
     <meta name="description" content="Secure sign in for GoHMoTech administrators and farm owners.">
     <title>Farm Portal Sign In | GoHMoTech</title>
     <link rel="icon" type="image/png" href="{% static 'images/gohmotech-logo.png' %}">
+    <link rel="manifest" href="{% static 'manifest.webmanifest' %}">
+    <link rel="apple-touch-icon" href="{% static 'images/pwa/icon-192.png' %}">
+    <meta name="theme-color" content="#174f38">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
@@ -192,5 +195,6 @@
         button.querySelector('[data-submit-label]').textContent = 'Signing in…';
     });
 </script>
+<script src="{% static 'js/pwa-register.js' %}" defer></script>
 </body>
 </html>
