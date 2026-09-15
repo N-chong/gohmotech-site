@@ -185,6 +185,10 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Goat camera captures are submitted as base64 form fields. Keep Django's form
+# parser aligned with the authenticated upload limit enforced by nginx.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 12 * 1024 * 1024
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]

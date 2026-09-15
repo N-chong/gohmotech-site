@@ -99,8 +99,34 @@ class StandardGoatPhotoTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-native-capture-angle=', count=5)
         self.assertContains(response, 'capture="environment"', count=5)
-        self.assertContains(response, 'goat-photos.css?v=mobile-3')
-        self.assertContains(response, 'goat-photo-capture.js?v=mobile-3')
+        self.assertContains(response, 'goat-photos.css?v=mobile-14')
+        self.assertContains(response, 'goat-photo-capture.js?v=mobile-14')
+        self.assertContains(response, 'data-camera-url-template=')
+        self.assertContains(response, 'data-photo-verification')
+        self.assertContains(response, 'data-verification-image')
+        self.assertContains(response, 'data-verification-retake')
+        self.assertContains(response, 'data-verification-use')
+
+    def test_dedicated_camera_page_is_scoped_to_requested_angle(self):
+        response = self.client.get(reverse('iot:goat_photo_camera', args=['left']))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-camera-angle="left"')
+        self.assertContains(response, 'Left Side View')
+        self.assertContains(response, 'Photograph the complete left side of the goat.')
+        self.assertContains(response, 'Capture This View')
+        self.assertContains(response, 'Visual Verification')
+        self.assertContains(response, 'data-captured-preview')
+        self.assertContains(response, 'data-photo-retake')
+        self.assertContains(response, 'data-photo-confirm')
+        self.assertContains(response, 'goat-photo-camera.css?v=window-6')
+        self.assertContains(response, 'goat-photo-camera-window.js?v=window-6')
+        self.assertContains(response, 'capture="environment"')
+
+    def test_dedicated_camera_page_rejects_unknown_angle(self):
+        response = self.client.get(reverse('iot:goat_photo_camera', args=['unknown']))
+
+        self.assertEqual(response.status_code, 404)
 
     def test_manage_page_can_add_a_standard_angle(self):
         goat = self.create_goat()
@@ -129,6 +155,32 @@ class StandardGoatPhotoTests(TestCase):
         self.assertTrue(
             GoatImage.objects.filter(goat__goat_id='CAPTURED-PHOTO', angle='rear').exists()
         )
+
+    def test_camera_capture_replaces_only_its_requested_angle(self):
+        goat = self.create_goat('ANGLE-ISOLATION')
+        front = GoatImage.objects.create(
+            goat=goat, angle=GoatImage.FRONT, image=test_photo('front-existing.jpg')
+        )
+        right = GoatImage.objects.create(
+            goat=goat, angle=GoatImage.RIGHT, image=test_photo('right-existing.jpg')
+        )
+        payload = self.goat_payload(goat.goat_id)
+        payload.pop('weight_kg')
+        captured = test_photo('left-capture.jpg', colors=('#3f3025', '#d9c7a0'))
+        payload['captured_photos'] = json.dumps({
+            GoatImage.LEFT: 'data:image/jpeg;base64,' + base64.b64encode(
+                captured.read()
+            ).decode('ascii')
+        })
+
+        response = self.client.post(
+            reverse('iot:goat_detail_enhanced', args=[goat.goat_id]), payload
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(goat.images.get(angle=GoatImage.FRONT).pk, front.pk)
+        self.assertEqual(goat.images.get(angle=GoatImage.RIGHT).pk, right.pk)
+        self.assertTrue(goat.images.filter(angle=GoatImage.LEFT).exists())
 
     def test_uploading_the_same_angle_replaces_instead_of_duplicating(self):
         goat = self.create_goat()

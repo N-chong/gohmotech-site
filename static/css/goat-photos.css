@@ -63,27 +63,43 @@
 .angle-selector button.active { background: var(--primary-600); border-color: var(--primary-600); color: #fff; }
 
 html.guided-camera-open,
-html.guided-camera-open body { overflow: hidden; overscroll-behavior: none; }
+html.guided-camera-open body,
+html.photo-verification-open,
+html.photo-verification-open body { overflow: hidden; overscroll-behavior: none; }
 .guided-camera[hidden] { display: none !important; }
-.guided-camera { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; background: rgba(4, 12, 8, .92); padding: 1rem; overflow: auto; }
-.guided-camera-dialog { width: min(720px, 100%); margin: auto; background: var(--card-bg); border-radius: var(--radius-lg); padding: 1rem; }
+.guided-camera { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; background: rgba(4, 12, 8, .92); padding: 1rem; overflow: hidden; }
+.guided-camera-dialog { width: min(720px, 100%); max-height: calc(100vh - 2rem); max-height: calc(100dvh - 2rem); margin: auto; background: var(--card-bg); border-radius: var(--radius-lg); padding: 1rem; display: flex; flex-direction: column; overflow: hidden; }
 .guided-camera-head { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
 .guided-camera-head span { font-size: .7rem; text-transform: uppercase; color: var(--primary-600); font-weight: 800; }
 .guided-camera-head h4 { margin: .2rem 0; }
 .guided-camera-head [data-camera-close] { flex: 0 0 44px; width: 44px; padding-inline: 0; }
-.guided-camera-dialog > p { color: var(--text-secondary); }
-.camera-frame { --camera-aspect: 4 / 3; --camera-ratio: 1.3333; position: relative; overflow: hidden; background: #000; border-radius: var(--radius-md); aspect-ratio: var(--camera-aspect); }
-.camera-frame video { width: 100%; height: 100%; display: block; object-fit: contain; }
+.guided-camera-dialog > p { flex: 0 0 auto; color: var(--text-secondary); }
+.camera-preview-stage { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.camera-frame { --camera-aspect: 4 / 3; position: relative; flex: 0 0 auto; width: 100%; max-width: 100%; max-height: 100%; overflow: hidden; background: #000; border-radius: var(--radius-md); aspect-ratio: var(--camera-aspect); }
+.camera-frame video { width: 100%; height: 100%; display: block; object-fit: contain; object-position: center; }
 .camera-guide { position: absolute; inset: 8%; border: 2px dashed rgba(255, 255, 255, .8); border-radius: 1rem; pointer-events: none; }
 .guide-body { position: absolute; left: 16%; top: 33%; width: 66%; height: 42%; border: 3px solid rgba(255, 255, 255, .72); border-radius: 50% 48% 38% 40%; }
 .guide-head { position: absolute; left: 9%; top: 25%; width: 22%; height: 31%; border: 3px solid rgba(255, 255, 255, .72); border-radius: 48%; }
 .guided-camera-actions { display: flex; justify-content: flex-end; gap: .7rem; margin-top: .9rem; }
+[data-guided-camera][data-angle="right"] .guide-body { transform: scaleX(-1); }
+[data-guided-camera][data-angle="right"] .guide-head { right: 9%; left: auto; }
 [data-guided-camera][data-angle="front"] .guide-body,
 [data-guided-camera][data-angle="rear"] .guide-body { left: 34%; top: 25%; width: 32%; height: 62%; }
 [data-guided-camera][data-angle="front"] .guide-head,
 [data-guided-camera][data-angle="rear"] .guide-head { left: 38%; top: 12%; width: 24%; height: 30%; }
 [data-guided-camera][data-angle="face"] .guide-body { display: none; }
 [data-guided-camera][data-angle="face"] .guide-head { left: 25%; top: 13%; width: 50%; height: 70%; }
+
+.photo-verification[hidden] { display: none !important; }
+.photo-verification { position: fixed; inset: 0; z-index: 2010; display: grid; place-items: center; padding: 1rem; overflow: auto; background: rgba(4, 12, 8, .92); }
+.photo-verification-dialog { width: min(680px, 100%); max-height: calc(100vh - 2rem); max-height: calc(100dvh - 2rem); overflow: auto; margin: auto; padding: 1rem; border-radius: var(--radius-lg); background: var(--card-bg); }
+.photo-verification-head span { color: var(--primary-600); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.photo-verification-head h4 { margin: .2rem 0 .85rem; }
+.photo-verification-preview { width: 100%; max-height: min(62vh, 620px); max-height: min(62dvh, 620px); display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: var(--radius-md); background: #000; }
+.photo-verification-preview img { display: block; max-width: 100%; max-height: min(62vh, 620px); max-height: min(62dvh, 620px); width: auto; height: auto; object-fit: contain; object-position: center; }
+.photo-verification-dialog > p { margin: .85rem 0; color: var(--text-secondary); text-align: center; }
+.photo-verification-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+.photo-verification-actions .btn { min-height: 48px; display: inline-flex; align-items: center; justify-content: center; gap: .35rem; }
 
 .comparison-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .comparison-photo { border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 1rem; background: var(--card-bg); }
@@ -109,14 +125,20 @@ html.guided-camera-open body { overflow: hidden; overscroll-behavior: none; }
     .comparison-grid { grid-template-columns: 1fr; }
 
     .guided-camera { display: block; width: 100%; height: 100vh; height: 100dvh; padding: 0; overflow: hidden; }
-    .guided-camera-dialog { width: 100%; height: 100vh; height: 100dvh; min-height: 0; margin: 0; border-radius: 0; padding: max(.75rem, env(safe-area-inset-top)) max(.75rem, env(safe-area-inset-right)) max(.75rem, env(safe-area-inset-bottom)) max(.75rem, env(safe-area-inset-left)); display: flex; flex-direction: column; overflow: hidden; }
+    .guided-camera-dialog { width: 100%; height: 100vh; height: 100dvh; max-height: none; min-height: 0; margin: 0; border-radius: 0; padding: max(.75rem, env(safe-area-inset-top)) max(.75rem, env(safe-area-inset-right)) max(.75rem, env(safe-area-inset-bottom)) max(.75rem, env(safe-area-inset-left)); }
     .guided-camera-head { flex: 0 0 auto; }
     .guided-camera-head h4 { font-size: 1.1rem; }
     .guided-camera-dialog > p { flex: 0 0 auto; font-size: .82rem; line-height: 1.35; margin: .35rem 0 .6rem; }
-    .camera-frame { flex: 0 1 auto; align-self: center; width: 100%; max-width: min(100%, calc((100dvh - 12rem) * var(--camera-ratio))); max-height: calc(100dvh - 12rem); min-height: 0; aspect-ratio: var(--camera-aspect); margin-block: auto; border-radius: .65rem; }
+    .camera-preview-stage { flex: 0 1 45dvh; width: 100%; height: 45vh; height: 45dvh; max-height: 45vh; max-height: 45dvh; margin-block: auto; }
+    .camera-frame { min-height: 0; border-radius: .65rem; }
     .photo-quality-message[data-camera-message] { flex: 0 0 auto; min-height: 1rem; margin-top: .35rem; }
     .guided-camera-actions { flex: 0 0 auto; display: grid; grid-template-columns: minmax(0, .7fr) minmax(0, 1.3fr); gap: .5rem; margin-top: .4rem; }
     .guided-camera-actions .btn { width: 100%; min-width: 0; min-height: 48px; padding-inline: .5rem; white-space: normal; }
+    .photo-verification { padding: 0; overflow: hidden; }
+    .photo-verification-dialog { width: 100%; height: 100vh; height: 100dvh; max-height: none; border-radius: 0; padding: max(.75rem, env(safe-area-inset-top)) max(.75rem, env(safe-area-inset-right)) max(.75rem, env(safe-area-inset-bottom)) max(.75rem, env(safe-area-inset-left)); display: flex; flex-direction: column; overflow: auto; }
+    .photo-verification-preview { flex: 1 1 auto; min-height: 0; max-height: none; }
+    .photo-verification-preview img { max-height: 100%; }
+    .photo-verification-actions { flex: 0 0 auto; }
 }
 
 @media (max-width: 380px) {
@@ -125,10 +147,13 @@ html.guided-camera-open body { overflow: hidden; overscroll-behavior: none; }
 }
 
 @media (max-height: 520px) and (orientation: landscape) {
-    .guided-camera-dialog { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.5fr); grid-template-rows: auto 1fr auto; gap: .35rem .75rem; }
+    .guided-camera { display: block; width: 100%; height: 100vh; height: 100dvh; padding: 0; }
+    .guided-camera-dialog { width: 100%; height: 100vh; height: 100dvh; max-height: none; min-height: 0; margin: 0; border-radius: 0; padding: max(.5rem, env(safe-area-inset-top)) max(.75rem, env(safe-area-inset-right)) max(.5rem, env(safe-area-inset-bottom)) max(.75rem, env(safe-area-inset-left)); display: grid; grid-template-columns: minmax(12rem, .8fr) minmax(0, 1.2fr); grid-template-rows: auto minmax(0, 1fr) auto; gap: .35rem .75rem; overflow: hidden; }
     .guided-camera-head,
     .guided-camera-dialog > p,
     .photo-quality-message[data-camera-message] { grid-column: 1; }
-    .camera-frame { grid-column: 2; grid-row: 1 / 4; min-height: 0; }
+    .guided-camera-dialog > p { margin-block: .25rem; font-size: .8rem; line-height: 1.25; }
+    .camera-preview-stage { grid-column: 2; grid-row: 1 / 4; width: 100%; height: 100%; margin: 0; }
+    .camera-frame { max-width: 100%; max-height: 100%; }
     .guided-camera-actions { grid-column: 1; align-self: end; }
 }

@@ -1,0 +1,59 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#071a12">
+    <title>{{ slot.label }} Camera | GoHMoTech</title>
+    <link rel="stylesheet" href="{% static 'css/goat-photo-camera.css' %}?v=window-6">
+</head>
+<body data-camera-angle="{{ slot.angle }}">
+    <main class="capture-window" aria-labelledby="capture-window-title">
+        <header class="capture-window-head">
+            <div>
+                <span>Goat photo</span>
+                <h1 id="capture-window-title">{{ slot.label }}</h1>
+                <p>{{ slot.guidance }}</p>
+            </div>
+            <button type="button" class="icon-button" data-camera-close aria-label="Close camera">&times;</button>
+        </header>
+
+        <div class="capture-stage" data-camera-stage>
+            <div class="capture-frame" data-camera-frame>
+                <video autoplay playsinline muted data-camera-video></video>
+                <div class="capture-guide angle-{{ slot.angle }}" aria-hidden="true">
+                    <span class="guide-body"></span><span class="guide-head"></span>
+                </div>
+            </div>
+        </div>
+
+        <p class="capture-message" data-camera-message role="status">Opening rear camera…</p>
+        <div class="capture-actions">
+            <button type="button" class="button button-secondary" data-camera-close>Cancel</button>
+            <button type="button" class="button button-primary" data-camera-shutter disabled>Capture This View</button>
+        </div>
+        <label class="native-camera-button" data-native-camera-button hidden>
+            Use Phone Camera
+            <input type="file" accept="image/*" capture="environment" data-native-camera>
+        </label>
+
+        <section class="visual-verification" data-visual-verification hidden aria-labelledby="visual-verification-title">
+            <div class="visual-verification-head">
+                <span>Visual Verification</span>
+                <h2 id="visual-verification-title">{{ slot.label }}</h2>
+            </div>
+            <div class="visual-verification-preview">
+                <img data-captured-preview alt="Captured {{ slot.label }}">
+            </div>
+            <p>Does this photo clearly show the required goat angle?</p>
+            <div class="visual-verification-actions">
+                <button type="button" class="button button-secondary" data-photo-retake>Retake</button>
+                <button type="button" class="button button-primary" data-photo-confirm>Use Photo</button>
+            </div>
+        </section>
+        <canvas data-camera-canvas hidden></canvas>
+    </main>
+    <script src="{% static 'js/goat-photo-camera-window.js' %}?v=window-6" defer></script>
+</body>
+</html>

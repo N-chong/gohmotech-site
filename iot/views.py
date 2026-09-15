@@ -7,6 +7,7 @@ from marketplace.decorators import farm_access_required, farm_owner_required, st
 from marketplace.permissions import FarmRolePermission, IsAdmin, IsFarmOwnerOrAdmin
 from django.utils import timezone
 from django.shortcuts import render, get_object_or_404, redirect
+from django.http import Http404
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import Avg, Max, Min, Count, Q, Sum
@@ -29,6 +30,15 @@ from .status_utils import (
 )
 from .device_authentication import HasLegacyDeviceKey
 from .goat_photos import photo_slots, prepared_standard_photos, save_standard_photo
+
+
+@farm_owner_required
+def goat_photo_camera(request, angle):
+    """Render a focused camera window for one standardized goat-photo angle."""
+    slot = next((item for item in photo_slots() if item['angle'] == angle), None)
+    if slot is None:
+        raise Http404('Unknown goat photo angle.')
+    return render(request, 'iot/goat_photo_camera.html', {'slot': slot})
 
 
 def _bounded_hours(request, default=24, maximum=168):

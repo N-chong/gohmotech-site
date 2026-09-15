@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     DeviceViewSet, SensorDataViewSet, AlertViewSet, SensorReadingViewSet,
     ActuatorStateViewSet, AutomationRuleViewSet, ActuationLogViewSet,
-    dashboard_modern, goats_list, goat_detail, add_goat, devices_list, device_detail, monitoring_dashboard,
+    dashboard_modern, goats_list, goat_detail, add_goat, goat_photo_camera, devices_list, device_detail, monitoring_dashboard,
     automation_control, automation_schedule,
     # Camera views
     camera_feed, camera_connect, start_camera, stop_camera, camera_status, all_cameras_status, camera_snapshot,
@@ -48,6 +48,7 @@ urlpatterns = [
     # Client-facing pages
     path('goats/', goats_list, name='goats_list'),  # Legacy view
     path('goats/add/', add_goat, name='add_goat'),
+    path('goats/photo-camera/<slug:angle>/', goat_photo_camera, name='goat_photo_camera'),
     path('goats/<str:goat_id>/', goat_detail, name='goat_detail'),  # Legacy view
     
     # Phase 5: Enhanced Goat Management

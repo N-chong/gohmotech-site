@@ -1,4 +1,5 @@
 <section class="goat-photo-section" data-goat-photo-manager
+         data-camera-url-template="{% url 'iot:goat_photo_camera' '__angle__' %}"
          {% if goat.pk %}data-delete-template="{% url 'iot:delete_goat_image' goat.goat_id 0 %}"{% endif %}>
     <div class="goat-photo-heading">
         <div>
@@ -81,15 +82,38 @@
                 <button type="button" class="btn btn-outline" data-camera-close aria-label="Close camera"><i class="bi bi-x-lg"></i></button>
             </div>
             <p data-camera-guidance></p>
-            <div class="camera-frame">
-                <video autoplay playsinline muted data-camera-video></video>
-                <div class="camera-guide" aria-hidden="true"><span class="guide-body"></span><span class="guide-head"></span></div>
+            <div class="camera-preview-stage">
+                <div class="camera-frame">
+                    <video autoplay playsinline muted data-camera-video></video>
+                    <div class="camera-guide" aria-hidden="true"><span class="guide-body"></span><span class="guide-head"></span></div>
+                </div>
             </div>
             <canvas data-camera-canvas hidden></canvas>
             <div class="photo-quality-message" data-camera-message role="status"></div>
             <div class="guided-camera-actions">
                 <button type="button" class="btn btn-secondary" data-camera-close>Cancel</button>
                 <button type="button" class="btn btn-primary" data-camera-shutter><i class="bi bi-camera-fill"></i> Capture This View</button>
+            </div>
+        </div>
+    </div>
+    <div class="photo-verification" data-photo-verification hidden>
+        <div class="photo-verification-dialog" role="dialog" aria-modal="true"
+             aria-labelledby="photo-verification-title" aria-describedby="photo-verification-question">
+            <div class="photo-verification-head">
+                <span>Visual Verification</span>
+                <h4 id="photo-verification-title" data-verification-title>Review captured photo</h4>
+            </div>
+            <div class="photo-verification-preview">
+                <img data-verification-image alt="">
+            </div>
+            <p id="photo-verification-question">Does this photo clearly show the required goat angle?</p>
+            <div class="photo-verification-actions">
+                <button type="button" class="btn btn-secondary" data-verification-retake>
+                    <i class="bi bi-arrow-counterclockwise"></i> Retake
+                </button>
+                <button type="button" class="btn btn-primary" data-verification-use>
+                    <i class="bi bi-check-lg"></i> Use Photo
+                </button>
             </div>
         </div>
     </div>{% endif %}
