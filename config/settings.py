@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     
     # Third party apps
     'rest_framework',
+    'rest_framework.authtoken',
     'corsheaders',
     'django_filters',
     'channels',           # WebSocket support
@@ -88,6 +89,7 @@ INSTALLED_APPS = [
     'security',      # Unified alerts/notifications, person detection
     'sms',           # SMS notifications (Semaphore) — daily, alerts, reminders
     'marketplace',   # Goat listings, inquiries, reservations, pickup, and sales
+    'mobile_api',    # Token-authenticated adapters for the Ionic owner app
 ]
 
 MIDDLEWARE = [
@@ -262,6 +264,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Django REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'mobile_api.authentication.ExpiringTokenAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
@@ -273,13 +276,21 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 100,
 }
+MOBILE_TOKEN_TTL_DAYS = max(1, int(os.getenv('MOBILE_TOKEN_TTL_DAYS', '30')))
 
 
 # CORS Settings
 CORS_ALLOWED_ORIGINS = os.getenv(
     'CORS_ALLOWED_ORIGINS',
-    'http://localhost:3000,http://127.0.0.1:3000'
+    'http://localhost:5173,http://127.0.0.1:5173,http://localhost:8100'
 ).split(',')
+MOBILE_ALLOWED_ORIGINS = [
+    origin.strip() for origin in os.getenv(
+        'MOBILE_ALLOWED_ORIGINS',
+        'https://localhost,capacitor://localhost',
+    ).split(',') if origin.strip()
+]
+CORS_ALLOWED_ORIGINS += MOBILE_ALLOWED_ORIGINS
 
 
 # Supabase Configuration

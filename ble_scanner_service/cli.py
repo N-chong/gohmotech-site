@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import logging
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -12,8 +13,16 @@ from .config import GOHMOTECH_IBEACON_UUID, ScannerConfig
 from .scanner import PortableBLEScanner
 
 
-load_dotenv()
-load_dotenv('ble_scanner.local.env', override=True)
+def load_environment():
+    """Keep an explicitly configured receiver separate from laptop settings."""
+    env_file = os.getenv('BLE_SCANNER_ENV_FILE')
+    if env_file:
+        if not Path(env_file).is_file():
+            raise ValueError(f'BLE scanner environment file does not exist: {env_file}')
+        load_dotenv(env_file, override=True)
+    else:
+        load_dotenv()
+        load_dotenv('ble_scanner.local.env', override=True)
 
 
 def _env_number(name, default, converter=float):
@@ -86,6 +95,11 @@ def build_parser():
         help='BLE API base URL, for example http://127.0.0.1:8000/iot/api/ble.',
     )
     parser.add_argument(
+        '--backend-host',
+        default=os.getenv('BLE_BACKEND_HOST'),
+        help='HTTP Host header when using a loopback reverse proxy on this Pi.',
+    )
+    parser.add_argument(
         '--receiver-id',
         default=os.getenv('BLE_RECEIVER_ID'),
         help='Provisioned receiver identifier. The key is read from BLE_RECEIVER_KEY.',
@@ -148,6 +162,7 @@ def backend_config_from_args(args):
         receiver_key=receiver_key,
         request_timeout_seconds=args.backend_timeout,
         queue_size=args.backend_queue_size,
+        host_header=args.backend_host,
     )
 
 
@@ -171,12 +186,13 @@ async def run_scanner(args):
 
 
 def main(argv=None):
-    args = build_parser().parse_args(argv)
-    logging.basicConfig(
-        level=logging.DEBUG if args.debug else logging.INFO,
-        format='%(asctime)s %(levelname)s %(message)s',
-    )
     try:
+        load_environment()
+        args = build_parser().parse_args(argv)
+        logging.basicConfig(
+            level=logging.DEBUG if args.debug else logging.INFO,
+            format='%(asctime)s %(levelname)s %(message)s',
+        )
         asyncio.run(run_scanner(args))
     except KeyboardInterrupt:
         logging.getLogger(__name__).info('Stopped by user.')

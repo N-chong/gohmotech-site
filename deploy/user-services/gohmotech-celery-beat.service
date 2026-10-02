@@ -1,0 +1,17 @@
+[Unit]
+Description=GoHMoTech production automation scheduler
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/gohmotech/capstone
+Environment=DJANGO_SETTINGS_MODULE=config.production
+Environment=PRODUCTION_ENV_FILE=/home/gohmotech/.config/gohmotech/production.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/gohmotech/capstone/.venv/bin/celery -A config beat --loglevel=INFO --schedule=/home/gohmotech/.local/share/gohmotech-production/celerybeat-schedule
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target

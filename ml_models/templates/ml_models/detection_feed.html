@@ -265,14 +265,14 @@
                                 <div class="col-md-4">
                                     <label class="form-label small fw-bold">Username</label>
                                     <input type="text" class="form-control form-control-sm"
-                                           id="camera-user" placeholder="admin"
-                                           value="{% if camera %}{{ camera.username }}{% endif %}">
+                                           id="camera-user" placeholder="Enter only when updating credentials"
+                                           autocomplete="off">
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label small fw-bold">Password</label>
                                     <input type="password" class="form-control form-control-sm"
-                                           id="camera-pass" placeholder="******"
-                                           value="{% if camera %}{{ camera.password }}{% endif %}">
+                                           id="camera-pass" placeholder="Enter only when updating credentials"
+                                           autocomplete="new-password">
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label small fw-bold">Detection interval (sec)</label>
@@ -566,13 +566,11 @@
         document.getElementById('avg-confidence').textContent = '0%';
     }
 
-    {% if is_system_admin %}// Save camera configuration to localStorage
+    {% if is_system_admin %}// Save only non-secret preferences to localStorage
     function saveCameraConfig() {
         const config = {
             ip: document.getElementById('camera-ip').value,
             type: document.getElementById('camera-type').value,
-            user: document.getElementById('camera-user').value,
-            pass: document.getElementById('camera-pass').value,
             interval: document.getElementById('detection-interval').value
         };
         localStorage.setItem('goatCameraConfig', JSON.stringify(config));
@@ -586,9 +584,10 @@
             const config = JSON.parse(savedConfig);
             document.getElementById('camera-ip').value = config.ip || '';
             document.getElementById('camera-type').value = config.type || 'http';
-            document.getElementById('camera-user').value = config.user || '';
-            document.getElementById('camera-pass').value = config.pass || '';
             document.getElementById('detection-interval').value = config.interval || '2';
+            delete config.user;
+            delete config.pass;
+            localStorage.setItem('goatCameraConfig', JSON.stringify(config));
             alert('Camera configuration loaded!');
         } else {
             alert('No saved configuration found');
@@ -684,9 +683,10 @@
             const config = JSON.parse(savedConfig);
             document.getElementById('camera-ip').value = config.ip || '';
             document.getElementById('camera-type').value = config.type || 'http';
-            document.getElementById('camera-user').value = config.user || '';
-            document.getElementById('camera-pass').value = config.pass || '';
             document.getElementById('detection-interval').value = config.interval || '2';
+            delete config.user;
+            delete config.pass;
+            localStorage.setItem('goatCameraConfig', JSON.stringify(config));
         }
         {% endif %}
     });

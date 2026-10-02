@@ -1,0 +1,19 @@
+[Unit]
+Description=GoHMoTech Raspberry Pi BLE receiver
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/gohmotech/capstone
+Environment=BLE_SCANNER_ENV_FILE=/home/gohmotech/.config/gohmotech/ble-scanner.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/gohmotech/capstone/.venv/bin/python ble_scanner.py
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+KillSignal=SIGINT
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

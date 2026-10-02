@@ -1,0 +1,7 @@
+{
+  "name": "GohMoTech App",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "vue-vite"
+}

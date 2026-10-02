@@ -1,5 +1,9 @@
 # GoHMoTech BLE Scanner: Windows Phase 1 Guide
 
+For the deployed Raspberry Pi receiver, see
+[the production BLE scanner guide](../deploy/BLE_SCANNER.md). The Windows
+Phase 1 notes below describe the earlier development setup.
+
 This guide covers development and acceptance testing for the DX-CP101 beacon
 using the Windows laptop as the BLE receiver. Raspberry Pi 5 deployment is not
 part of Phase 1.

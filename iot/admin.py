@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django import forms
 from .models import (
     Device, SensorData, Alert, SensorReading,
     Goat, GoatWeightMeasurement, GoatImage, GoatBehaviorLog, GrassHealthLog,
@@ -7,6 +8,73 @@ from .models import (
     BLETrackingSettings,
 )
 from .goat_models import IPCamera, GoatDetectionHistory, MissingGoatAlert, NotificationLog
+
+
+class IPCameraAdminForm(forms.ModelForm):
+    """Do not render stored camera credentials or credential-bearing URLs."""
+
+    username = forms.CharField(
+        required=False,
+        max_length=100,
+        widget=forms.PasswordInput(
+            render_value=False,
+            attrs={'autocomplete': 'new-password'},
+        ),
+        help_text='Leave blank to keep the stored camera username.',
+    )
+    password = forms.CharField(
+        required=False,
+        max_length=100,
+        strip=False,
+        widget=forms.PasswordInput(
+            render_value=False,
+            attrs={'autocomplete': 'new-password'},
+        ),
+        help_text='Leave blank to keep the stored camera password.',
+    )
+    rtsp_url = forms.CharField(
+        required=False,
+        max_length=500,
+        widget=forms.PasswordInput(render_value=False),
+        help_text='Leave blank to keep the stored RTSP URL.',
+    )
+    http_url = forms.CharField(
+        required=False,
+        max_length=500,
+        widget=forms.PasswordInput(render_value=False),
+        help_text='Leave blank to keep the stored HTTP stream URL.',
+    )
+    snapshot_url = forms.CharField(
+        required=False,
+        max_length=500,
+        widget=forms.PasswordInput(render_value=False),
+        help_text='Leave blank to keep the stored snapshot URL.',
+    )
+
+    class Meta:
+        model = IPCamera
+        fields = '__all__'
+
+    def _preserved_value(self, field_name):
+        value = self.cleaned_data.get(field_name)
+        if value or not self.instance.pk:
+            return value
+        return getattr(self.instance, field_name)
+
+    def clean_username(self):
+        return self._preserved_value('username')
+
+    def clean_password(self):
+        return self._preserved_value('password')
+
+    def clean_rtsp_url(self):
+        return self._preserved_value('rtsp_url')
+
+    def clean_http_url(self):
+        return self._preserved_value('http_url')
+
+    def clean_snapshot_url(self):
+        return self._preserved_value('snapshot_url')
 
 
 @admin.register(Device)
@@ -154,6 +222,7 @@ class ActuationLogAdmin(admin.ModelAdmin):
 
 @admin.register(IPCamera)
 class IPCameraAdmin(admin.ModelAdmin):
+    form = IPCameraAdminForm
     list_display = ['camera_id', 'name', 'camera_type', 'ip_address', 'mac_address', 'location', 'status', 'is_active', 'last_connected']
     list_filter = ['camera_type', 'status', 'is_active', 'enable_goat_detection', 'created_at']
     search_fields = ['camera_id', 'name', 'mac_address', 'ip_address', 'location']

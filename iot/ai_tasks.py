@@ -205,7 +205,7 @@ def capture_frame_from_camera(camera):
             cap = cv2.VideoCapture(camera.rtsp_url)
             
             if not cap.isOpened():
-                logger.error(f"Failed to open RTSP stream: {camera.rtsp_url}")
+                logger.error("Failed to open RTSP stream for camera %s", camera.name)
                 return None
             
             # Read frame
@@ -641,6 +641,8 @@ def start_realtime_detection(camera_id=None, stream_url=None, fps=4, enable_reid
     finally:
         if cap:
             cap.release()
+        if stream:
+            stream.stop()
 
 
 @shared_task(name='iot.tasks.stop_realtime_detection')

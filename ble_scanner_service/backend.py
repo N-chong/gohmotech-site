@@ -26,6 +26,7 @@ class BackendConfig:
     receiver_key: str
     request_timeout_seconds: float = 5.0
     queue_size: int = 100
+    host_header: str | None = None
 
     def __post_init__(self):
         base_url = str(self.base_url).strip().rstrip('/')
@@ -40,6 +41,11 @@ class BackendConfig:
             raise ValueError('Backend request timeout must be greater than zero.')
         if not 1 <= self.queue_size <= 10000:
             raise ValueError('Backend queue size must be between 1 and 10000.')
+        if self.host_header:
+            if parsed.hostname not in {'127.0.0.1', '::1', 'localhost'}:
+                raise ValueError('A backend Host override requires a loopback URL.')
+            if any(character.isspace() for character in self.host_header):
+                raise ValueError('Backend Host cannot contain whitespace.')
         object.__setattr__(self, 'base_url', base_url)
         object.__setattr__(self, 'receiver_id', str(self.receiver_id).strip())
 
@@ -57,11 +63,14 @@ class BLEBackendReporter:
 
     @property
     def headers(self):
-        return {
+        headers = {
             'X-Receiver-ID': self.config.receiver_id,
             'Authorization': f'Bearer {self.config.receiver_key}',
             'Content-Type': 'application/json',
         }
+        if self.config.host_header:
+            headers['Host'] = self.config.host_header
+        return headers
 
     def _post_json_sync(self, path, payload):
         url = f'{self.config.base_url}/{path.lstrip("/")}'

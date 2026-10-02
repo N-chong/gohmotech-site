@@ -58,11 +58,14 @@
         border-radius: 50%;
     }
     .time-badge {
-        background: var(--primary-600);
-        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        background: var(--primary-600, #2563eb) !important;
+        color: #fff !important;
         padding: 0.4rem 0.8rem;
         border-radius: var(--radius-md);
         font-weight: 600;
+        line-height: 1.2;
     }
     .automation-empty {
         text-align: center;
@@ -79,7 +82,12 @@
     .day-checkbox { display: inline-block; margin-right: var(--spacing-sm); }
     .modal-header { background: var(--gradient-hero); color: #fff; }
     .modal-header .modal-title { color: #fff; }
+{% endblock %}
+
 {% block content %}
+<form id="automationScheduleCsrfForm" hidden aria-hidden="true">
+    {% csrf_token %}
+</form>
 <div class="page-header">
     <div>
         <div class="page-eyebrow">Automation</div>
@@ -131,9 +139,9 @@
                         {% for schedule in door_schedules %}
                         <div class="schedule-item {% if not schedule.is_active %}inactive{% endif %}">
                             <div>
-                                <span class="time-badge">{{ schedule.time }}</span>
-                                <span class="badge badge-info ms-2">{{ schedule.action }}</span>
-                                {% if schedule.days %}<small class="text-muted ms-2">{{ schedule.days }}</small>{% endif %}
+                                <span class="time-badge">{{ schedule.display_time }}</span>
+                                <span class="badge badge-info ms-2">{{ schedule.display_action }}</span>
+                                <small class="text-muted ms-2">{{ schedule.display_days }}</small>
                             </div>
                             <div>
                                 <button class="btn btn-sm btn-icon btn-outline" onclick="toggleSchedule({{ schedule.id }})">
@@ -159,9 +167,9 @@
                         {% for schedule in light_schedules %}
                         <div class="schedule-item {% if not schedule.is_active %}inactive{% endif %}">
                             <div>
-                                <span class="time-badge">{{ schedule.time }}</span>
-                                <span class="badge badge-warning ms-2">{{ schedule.action }}</span>
-                                {% if schedule.days %}<small class="text-muted ms-2">{{ schedule.days }}</small>{% endif %}
+                                <span class="time-badge">{{ schedule.display_time }}</span>
+                                <span class="badge badge-warning ms-2">{{ schedule.display_action }}</span>
+                                <small class="text-muted ms-2">{{ schedule.display_days }}</small>
                             </div>
                             <div>
                                 <button class="btn btn-sm btn-icon btn-outline" onclick="toggleSchedule({{ schedule.id }})">
@@ -377,6 +385,8 @@
                                     <option value="humidity">Humidity</option>
                                     <option value="rain">Rain Detected</option>
                                     <option value="distance">Feeder Distance</option>
+                                    <option value="light_level_percentage">LDR Light Level (%)</option>
+                                    <option value="light_raw">LDR Raw ADC (0-4095)</option>
                                 </select>
                             </div>
                             <div class="col-md-4">
@@ -429,7 +439,10 @@
         }
         return cookieValue;
     }
-    const csrftoken = getCookie('csrftoken');
+    const csrfInput = document.querySelector(
+        '#automationScheduleCsrfForm [name="csrfmiddlewaretoken"]'
+    );
+    const csrftoken = csrfInput ? csrfInput.value : getCookie('csrftoken');
 
     // Toggle master automation
     function toggleMasterAutomation(enabled) {
@@ -765,5 +778,4 @@
         document.getElementById('ruleForm').reset();
     });
 </script>
-{% endblock %}
 {% endblock %}

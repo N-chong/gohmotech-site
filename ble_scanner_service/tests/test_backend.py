@@ -38,8 +38,37 @@ class BackendConfigTests(unittest.TestCase):
             'http://127.0.0.1:8000/iot/api/ble',
         )
 
+    def test_host_override_is_limited_to_loopback_and_rejects_newlines(self):
+        with self.assertRaisesRegex(ValueError, 'loopback'):
+            BackendConfig(
+                'https://farm.example/iot/api/ble', 'pi', 'secret',
+                host_header='farm.example',
+            )
+        with self.assertRaisesRegex(ValueError, 'whitespace'):
+            BackendConfig(
+                'http://127.0.0.1:8080/iot/api/ble', 'pi', 'secret',
+                host_header='farm.example\r\nOther: value',
+            )
+
 
 class BackendReporterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_loopback_proxy_receives_host_and_receiver_auth(self):
+        reporter = BLEBackendReporter(BackendConfig(
+            'http://127.0.0.1:8080/iot/api/ble', 'pi', 'secret',
+            host_header='farm.example',
+        ))
+        with mock.patch('ble_scanner_service.backend.requests.post') as post:
+            post.return_value = FakeResponse({'accepted': True})
+            await reporter._post_json('observations/', {'rssi': -50})
+        self.assertEqual(
+            post.call_args.args[0],
+            'http://127.0.0.1:8080/iot/api/ble/observations/',
+        )
+        headers = post.call_args.kwargs['headers']
+        self.assertEqual(headers['Host'], 'farm.example')
+        self.assertEqual(headers['X-Receiver-ID'], 'pi')
+        self.assertEqual(headers['Authorization'], 'Bearer secret')
+
     async def test_heartbeat_assignments_and_observations_use_receiver_auth(self):
         calls = []
 

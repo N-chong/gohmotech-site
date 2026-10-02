@@ -38,7 +38,13 @@ ALLOWED_HOSTS = [
 if any(not host or "*" in host or "/" in host or ":" in host for host in ALLOWED_HOSTS):
     raise ImproperlyConfigured("Production hosts must be explicit hostnames.")
 CSRF_TRUSTED_ORIGINS = [f"https://{host}" for host in ALLOWED_HOSTS]
-CORS_ALLOWED_ORIGINS = CSRF_TRUSTED_ORIGINS
+MOBILE_ALLOWED_ORIGINS = [
+    origin.strip() for origin in os.environ.get(
+        "PRODUCTION_MOBILE_ALLOWED_ORIGINS",
+        "https://localhost,capacitor://localhost",
+    ).split(",") if origin.strip()
+]
+CORS_ALLOWED_ORIGINS = CSRF_TRUSTED_ORIGINS + MOBILE_ALLOWED_ORIGINS
 
 SECURE_SSL_REDIRECT = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

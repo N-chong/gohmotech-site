@@ -6,8 +6,13 @@
       if (!THREE || !container) return null;
 
       const loading = container.querySelector('.goat-house-loading');
+      const initialLightOn = container.dataset.lightState === 'on';
       let destroyed = false;
       let animationFrameId = null;
+      const mobile = window.matchMedia('(max-width: 767px)').matches;
+      let inViewport = true;
+      let dirtyFrames = 1;
+      let initialized = false;
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0x9bc6dc);
       scene.fog = new THREE.Fog(0x9bc6dc, 30, 66);
@@ -17,8 +22,8 @@
       const camera = new THREE.PerspectiveCamera(48, initialWidth / initialHeight, 0.1, 120);
       camera.position.set(8.6, 5.4, 10.2);
 
-      const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-      renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+      const renderer = new THREE.WebGLRenderer({ antialias: !mobile, powerPreference: 'low-power' });
+      renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1 : 1.75));
       renderer.setSize(initialWidth, initialHeight, false);
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -542,6 +547,11 @@
         camera.lookAt(target);
       }
 
+      function invalidate() {
+        dirtyFrames = 90;
+        if (initialized && !destroyed && inViewport && !document.hidden && animationFrameId === null) animate();
+      }
+
       renderer.domElement.addEventListener('contextmenu', event => event.preventDefault());
       renderer.domElement.addEventListener('pointerdown', event => {
         dragging = true;
@@ -565,6 +575,7 @@
           targetSpherical.phi = THREE.MathUtils.clamp(targetSpherical.phi - dy * .006, .3, 1.46);
         }
         setActiveView('');
+        invalidate();
       });
       renderer.domElement.addEventListener('pointerup', event => {
         dragging = false;
@@ -574,6 +585,7 @@
         event.preventDefault();
         targetSpherical.radius = THREE.MathUtils.clamp(targetSpherical.radius + event.deltaY * .012, 7.5, 27);
         setActiveView('');
+        invalidate();
       }, { passive: false });
 
       const views = {
@@ -596,6 +608,7 @@
           const offset = new THREE.Vector3(...view.position).sub(targetLookAt);
           targetSpherical = new THREE.Spherical().setFromVector3(offset);
           setActiveView(button.dataset.view);
+          invalidate();
         };
         button.addEventListener('click', handler);
         return [button, handler];
@@ -608,6 +621,7 @@
         bulbMaterial.color.setHex(isOn ? 0xfff1bf : 0x6c726e);
         bulbGlow.visible = isOn;
         container.dataset.lightState = isOn ? 'on' : 'off';
+        invalidate();
       }
 
       function updateEnvironment(isDay) {
@@ -646,7 +660,9 @@
       }
 
       function refreshEnvironment() {
+        if (document.hidden || !inViewport) return;
         updateEnvironment(isManilaDaytime());
+        invalidate();
       }
 
       function onSystemLightState(event) {
@@ -655,7 +671,7 @@
       }
       window.addEventListener('gohmotech:light-state', onSystemLightState);
       refreshEnvironment();
-      updateInteriorLight(false);
+      updateInteriorLight(initialLightOn);
       const environmentTimer = window.setInterval(refreshEnvironment, 60000);
 
       function resize() {
@@ -664,8 +680,9 @@
         const height = Math.max(container.clientHeight, 1);
         camera.aspect = width / height;
         camera.updateProjectionMatrix();
-        renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+        renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1 : 1.75));
         renderer.setSize(width, height, false);
+        invalidate();
       }
       const resizeObserver = window.ResizeObserver ? new ResizeObserver(resize) : null;
       if (resizeObserver) resizeObserver.observe(container);
@@ -673,22 +690,32 @@
 
       let firstFrame = true;
       function animate() {
-        if (destroyed) return;
-        animationFrameId = requestAnimationFrame(animate);
+        animationFrameId = null;
+        if (destroyed || document.hidden || !inViewport) return;
         syncCamera();
         renderer.render(scene, camera);
         if (firstFrame) {
           firstFrame = false;
           if (loading) loading.hidden = true;
         }
+        if (--dirtyFrames > 0) animationFrameId = requestAnimationFrame(animate);
       }
-      animate();
+      const visibilityObserver = window.IntersectionObserver ? new IntersectionObserver(entries => {
+        inViewport = entries[0].isIntersecting;
+        if (inViewport) invalidate();
+      }) : null;
+      if (visibilityObserver) visibilityObserver.observe(container);
+      document.addEventListener('visibilitychange', invalidate);
+      initialized = true;
+      invalidate();
 
       function destroy() {
         if (destroyed) return;
         destroyed = true;
         if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
         window.clearInterval(environmentTimer);
+        if (visibilityObserver) visibilityObserver.disconnect();
+        document.removeEventListener('visibilitychange', invalidate);
         window.removeEventListener('gohmotech:light-state', onSystemLightState);
         if (resizeObserver) resizeObserver.disconnect();
         else window.removeEventListener('resize', resize);

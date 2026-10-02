@@ -1,4 +1,5 @@
 {% extends 'base_modern.html' %}
+{% load static %}
 
 {% block title %}{{ camera.name }} - GoHMoTech{% endblock %}
 
@@ -30,13 +31,12 @@
                     <h5 class="mb-0"><i class="bi bi-broadcast"></i> Live Feed</h5>
                 </div>
                 <div class="card-body p-0">
-                    <div style="position: relative; background: #000; min-height: 500px;" id="camera-container">
+                    <div style="position: relative; background: #000; aspect-ratio: 16 / 9;" id="camera-container">
                         {% if camera.is_active %}
-                            <img src="{% url 'iot:camera_feed' camera.id %}"
+                            <img data-live-camera data-camera-id="{{ camera.id }}" data-feed-url="{% url 'iot:camera_feed' camera.id %}?fps=10&quality=70&width=960"
                                  alt="{{ camera.name }}"
                                  id="camera-image"
-                                 style="width: 100%; height: auto; display: block;"
-                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                 style="width: 100%; height: 100%; object-fit: contain; display: block;">
                             <canvas id="bbox-canvas" 
                                     style="position: absolute; top: 0; left: 0; pointer-events: none; z-index: 10;"></canvas>
                             <div id="goat-count-badge" 
@@ -52,10 +52,10 @@
                                     <i class="bi bi-stop-circle"></i> Stop Detection
                                 </button>
                             </div>
-                            <div style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #1a1a1a; color: white; align-items: center; justify-content: center; flex-direction: column;">
+                            <div data-camera-state id="camera-stream-state" role="status" aria-live="polite" style="display: flex; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #1a1a1a; color: white; align-items: center; justify-content: center; flex-direction: column; z-index: 12;">
                                 <i class="bi bi-camera-video-off-fill" style="font-size: 5rem;"></i>
-                                <h4 class="mt-3">Camera Offline</h4>
-                                <p class="text-muted">Unable to connect to camera stream</p>
+                                <h4 class="mt-3" id="camera-stream-title">Connecting to camera...</h4>
+                                <p class="text-muted" id="camera-stream-message">Waiting for the first video frame</p>
                                 <button class="btn btn-outline-light mt-2" onclick="location.reload()">
                                     <i class="bi bi-arrow-clockwise"></i> Retry
                                 </button>
@@ -147,20 +147,16 @@
                             <th>Port:</th>
                             <td><code>{{ camera.port }}</code></td>
                         </tr>
-                        <tr>
-                            <th>Username:</th>
-                            <td>{{ camera.username|default:"<em>Not set</em>" }}</td>
-                        </tr>
                         {% if camera.rtsp_url %}
                         <tr>
-                            <th>RTSP URL:</th>
-                            <td><small class="text-muted">{{ camera.rtsp_url|truncatechars:40 }}</small></td>
+                            <th>RTSP:</th>
+                            <td><small class="text-muted">Configured server-side (credentials hidden)</small></td>
                         </tr>
                         {% endif %}
                         {% if camera.http_url %}
                         <tr>
-                            <th>HTTP URL:</th>
-                            <td><small class="text-muted">{{ camera.http_url|truncatechars:40 }}</small></td>
+                            <th>HTTP stream:</th>
+                            <td><small class="text-muted">Configured server-side (credentials hidden)</small></td>
                         </tr>
                         {% endif %}
                     </table>
@@ -178,9 +174,13 @@
     }
 </style>
 
+<script defer src="{% static 'js/live-camera.js' %}?v=5"></script>
 <script>
 let detectionInterval = null;
 let isDetecting = false;
+let detectionPending = false;
+
+// Live state now reflects decoded browser frames, not just backend status.
 
 function startDetection() {
     if (isDetecting) return;
@@ -210,10 +210,12 @@ function stopDetection() {
 }
 
 async function runDetection() {
+    if (document.hidden || detectionPending || !isDetecting) return;
+    detectionPending = true;
     try {
         const img = document.getElementById('camera-image');
         
-        if (!img || !img.complete || img.naturalWidth === 0) {
+        if (!img || !img.complete || img.naturalWidth === 0 || img.dataset.liveState !== 'Live') {
             return;
         }
         
@@ -252,6 +254,8 @@ async function runDetection() {
     } catch (error) {
         console.error('Detection error:', error);
         showError('Detection failed: ' + error.message);
+    } finally {
+        detectionPending = false;
     }
 }
 
@@ -369,6 +373,7 @@ function getCookie(name) {
 }
 
 // Auto-resize canvas when window resizes
+window.addEventListener('pagehide', stopDetection);
 window.addEventListener('resize', () => {
     if (isDetecting) {
         const img = document.getElementById('camera-image');

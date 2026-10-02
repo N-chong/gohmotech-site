@@ -1,0 +1,17 @@
+[Unit]
+Description=GoHMoTech production automation worker
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/gohmotech/capstone
+Environment=DJANGO_SETTINGS_MODULE=config.production
+Environment=PRODUCTION_ENV_FILE=/home/gohmotech/.config/gohmotech/production.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/gohmotech/capstone/.venv/bin/celery -A config worker --loglevel=INFO --concurrency=2
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=60
+
+[Install]
+WantedBy=default.target

@@ -699,7 +699,7 @@
                         .goat-house-viewbar { right: 8px; bottom: 8px; }
                     }
                 </style>
-                <div id="canvas-container-3d">
+                <div id="canvas-container-3d" data-light-state="{{ actuators.light.current_state|default:'off' }}">
                     <div class="goat-house-loading" role="status">Preparing approved 3D goat house…</div>
                     <nav class="goat-house-viewbar" aria-label="3D camera views">
                         <button class="active" type="button" data-view="review">Review</button>
@@ -776,7 +776,7 @@
     </div>
 
     <!-- ===== Security alerts + Recent activity ===== -->
-    <div style="padding-bottom: 30px;">
+    <div style="padding-bottom: 30px;" data-dashboard-events>
         <div class="row g-4">
             <!-- Active Alerts (real, from unresolved iot.Alert) -->
             <div class="col-lg-6">
@@ -877,12 +877,11 @@
                             <i class="bi bi-house-door-fill"></i> {{ camera.location }}
                         </small>
                     </div>
-                    <div class="camera-body" style="position: relative; background: #000; min-height: 400px;">
-                        <img src="{% url 'iot:camera_feed' camera.id %}"
+                    <div class="camera-body" style="position: relative; background: #000; aspect-ratio: 16 / 9;">
+                        <img data-live-camera data-camera-id="{{ camera.id }}" data-feed-url="{% url 'iot:camera_feed' camera.id %}?fps=10&quality=70&width=960"
                              alt="{{ camera.name }}"
-                             style="width: 100%; height: auto; display: block;"
-                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                        <div class="camera-offline" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #1a1a1a; color: white; align-items: center; justify-content: center; flex-direction: column;">
+                             style="width: 100%; height: 100%; object-fit: contain; display: block;">
+                        <div data-camera-state role="status" class="camera-offline" style="display: flex; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #1a1a1a; color: white; align-items: center; justify-content: center; flex-direction: column;">
                             <i class="bi bi-camera-video-off-fill" style="font-size: 3rem;"></i>
                             <p class="mt-2">Camera Offline</p>
                             <small class="text-muted">Check camera connection</small>
@@ -929,8 +928,8 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="{% static 'js/goat_house_viewer.js' %}"></script>
+<script defer src="{% static 'js/live-camera.js' %}?v=5"></script>
+<script defer src="{% static 'js/dashboard-runtime.js' %}?v=2"></script>
 <script>
     // Initialize tooltips
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
@@ -945,8 +944,11 @@
     }
     
     // Function to update auto-feed status dynamically
+    let feedingPending = false;
     function updateAutoFeedStatus() {
-        fetch('/feeding/api/config/status/')
+        if (document.hidden || feedingPending) return;
+        feedingPending = true;
+        const configRequest = fetch('/feeding/api/config/status/', {signal: AbortSignal.timeout(10000)})
             .then(response => response.json())
             .then(data => {
                 const statusElement = document.querySelector('.auto-feed-status-value');
@@ -957,28 +959,32 @@
             .catch(error => console.error('Error fetching auto-feed status:', error));
         
         // Update active schedules count
-        fetch('/feeding/api/schedules/')
+        const schedulesRequest = fetch('/feeding/api/schedules/?is_active=true', {signal: AbortSignal.timeout(10000)})
             .then(response => response.json())
             .then(data => {
                 const results = data.results || data;
-                const activeCount = results.filter(s => s.is_active).length;
+                const activeCount = data.count ?? results.filter(s => s.is_active).length;
                 const countElement = document.querySelector('.active-schedules-count');
                 if (countElement) {
                     countElement.textContent = activeCount;
                 }
             })
             .catch(error => console.error('Error fetching schedules:', error));
+        Promise.allSettled([configRequest, schedulesRequest]).finally(() => { feedingPending = false; });
     }
     
     // Update status on page load
-    updateAutoFeedStatus();
+    // Initial values are already rendered by Django.
 
     // Refresh only the BLE summary; the full page and 3D view remain untouched.
+    let blePending = false;
     function updateBleSummary() {
         const section = document.querySelector('[data-ble-summary]');
-        if (!section || document.hidden) return;
+        if (!section || document.hidden || blePending) return;
+        blePending = true;
         fetch(section.dataset.apiUrl, {
             credentials: 'same-origin',
+            signal: AbortSignal.timeout(10000),
             headers: {'Accept': 'application/json'},
             cache: 'no-store'
         })
@@ -1022,13 +1028,12 @@
                 const text = document.getElementById('bleReceiverText');
                 if (state) state.className = 'ble-summary-state offline';
                 if (text) text.textContent = 'BLE update unavailable';
-            });
+            }).finally(() => { blePending = false; });
     }
-    updateBleSummary();
-    setInterval(updateBleSummary, 5000);
+    setInterval(updateBleSummary, 10000);
     
     // Poll for changes every 5 seconds
-    setInterval(updateAutoFeedStatus, 5000);
+    setInterval(updateAutoFeedStatus, 20000);
     
     // Listen for localStorage changes (cross-tab communication)
     window.addEventListener('storage', function(e) {
@@ -1043,10 +1048,9 @@
     // mid-interaction with a barn control popup, so we don't reset the 3D scene
     // or interrupt an action.
     setInterval(() => {
-        updateLastUpdate();
         const popupOpen = document.querySelector('.barn-control-popup.active');
         if (document.visibilityState === 'visible' && !popupOpen) {
-            location.reload();
+            window.refreshDashboardMetrics?.().then(updateLastUpdate).catch(() => {});
         }
     }, 45000);
     
@@ -1066,17 +1070,17 @@
     // Approved goat-house prototype, adapted to the dashboard lifecycle.
     (function() {
         const container = document.getElementById('canvas-container-3d');
-        if (!container || !window.createApprovedGoatHouseViewer) return;
+        if (!container) return;
         if (window.goatHouseViewer && window.goatHouseViewer.destroy) {
             window.goatHouseViewer.destroy();
         }
-        window.goatHouseViewer = window.createApprovedGoatHouseViewer(container);
+        window.initializeDashboardViewer?.(container);
         window.addEventListener('pagehide', function destroyGoatHouseViewer() {
             if (window.goatHouseViewer && window.goatHouseViewer.destroy) {
                 window.goatHouseViewer.destroy();
                 window.goatHouseViewer = null;
             }
-        }, { once: true });
+        });
     })();
 
     // ===== 3D Barn Control Popups =====
@@ -1121,6 +1125,8 @@
         }
 
         function publishLightState(currentState) {
+            const scene = document.getElementById('canvas-container-3d');
+            if (scene) scene.dataset.lightState = currentState;
             window.dispatchEvent(new CustomEvent('gohmotech:light-state', {
                 detail: { state: currentState, isOn: currentState === 'on' }
             }));
@@ -1284,7 +1290,7 @@
             });
         }
 
-        refreshStatuses();
+        // Popup status is loaded on opening; avoid duplicate startup requests.
     })();
 </script>
 {% endblock %}

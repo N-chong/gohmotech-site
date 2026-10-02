@@ -129,6 +129,13 @@
     .auto-row.inactive { opacity: .55; }
     .auto-row > .d-flex { min-width: 0; gap: .65rem; }
     .auto-row > .d-flex > div:first-child { min-width: 0; overflow-wrap: anywhere; }
+    .automation-time-badge {
+        display: inline-flex;
+        align-items: center;
+        background: var(--primary-600, #2563eb) !important;
+        color: #fff !important;
+        line-height: 1.2;
+    }
 
     /* Auto-refresh chip in the page actions row */
     .refresh-chip { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; font-weight: 600; padding: 5px 12px; border-radius: var(--radius-full); background: var(--success-bg); color: var(--success); border: 1px solid var(--success-border); }
@@ -185,6 +192,9 @@
 
 {% block content %}
 
+<form id="automationCsrfForm" hidden aria-hidden="true">
+    {% csrf_token %}
+</form>
 <div class="automation-page">
 
     <!-- Intro row: subtitle + auto-refresh indicator -->
@@ -210,7 +220,7 @@
             <i class="bi bi-exclamation-octagon-fill cb-ico"></i>
             <div>
                 <div class="cb-title">No controller registered</div>
-                <div class="cb-sub">The main ESP32 (<code>kamotech_esp32_001</code>) has not reported to the server yet. Controls stay disabled until it connects and posts sensor data.</div>
+                <div class="cb-sub">The main ESP32 (<code>{{ controller.device_id }}</code>) has not reported to the server yet. Controls stay disabled until it connects and posts sensor data.</div>
             </div>
         </div>
     {% elif controller.online %}
@@ -553,9 +563,9 @@
                                     <div class="auto-row {% if not schedule.is_active %}inactive{% endif %}">
                                         <div class="d-flex justify-content-between align-items-center">
                                             <div>
-                                                <span class="badge badge-primary">{{ schedule.time }}</span>
-                                                <span class="badge badge-info ms-2">{{ schedule.action }}</span>
-                                                {% if schedule.days %}<small class="text-tertiary ms-2">{{ schedule.days }}</small>{% endif %}
+                                                <span class="badge automation-time-badge">{{ schedule.display_time }}</span>
+                                                <span class="badge badge-info ms-2">{{ schedule.display_action }}</span>
+                                                <small class="text-tertiary ms-2">{{ schedule.display_days }}</small>
                                             </div>
                                             <div class="d-flex gap-1">
                                                 <button class="btn btn-sm btn-outline" onclick="toggleSchedule({{ schedule.id }})" title="{% if schedule.is_active %}Pause{% else %}Resume{% endif %}">
@@ -583,9 +593,9 @@
                                     <div class="auto-row {% if not schedule.is_active %}inactive{% endif %}">
                                         <div class="d-flex justify-content-between align-items-center">
                                             <div>
-                                                <span class="badge badge-primary">{{ schedule.time }}</span>
-                                                <span class="badge badge-warning ms-2">{{ schedule.action }}</span>
-                                                {% if schedule.days %}<small class="text-tertiary ms-2">{{ schedule.days }}</small>{% endif %}
+                                                <span class="badge automation-time-badge">{{ schedule.display_time }}</span>
+                                                <span class="badge badge-warning ms-2">{{ schedule.display_action }}</span>
+                                                <small class="text-tertiary ms-2">{{ schedule.display_days }}</small>
                                             </div>
                                             <div class="d-flex gap-1">
                                                 <button class="btn btn-sm btn-outline" onclick="toggleSchedule({{ schedule.id }})" title="{% if schedule.is_active %}Pause{% else %}Resume{% endif %}">
@@ -613,7 +623,7 @@
                                     <div class="auto-row {% if not schedule.is_active %}inactive{% endif %}">
                                         <div class="d-flex justify-content-between align-items-center">
                                             <div>
-                                                <span class="badge badge-primary">{{ schedule.schedule_time|time:"g:i A" }}</span>
+                                                <span class="badge automation-time-badge">{{ schedule.schedule_time|time:"g:i A" }}</span>
                                                 <span class="badge badge-success ms-2">Dispense feed</span>
                                                 {% if schedule.days_of_week %}<small class="text-tertiary ms-2">{{ schedule.get_days_display }}</small>{% endif %}
                                             </div>
@@ -761,10 +771,17 @@
         return cookieValue;
     }
 
+    // Production uses a custom CSRF cookie name. Django's rendered token is
+    // stable across environments and avoids coupling Fetch calls to that name.
+    function getCsrfToken() {
+        const input = document.querySelector('#automationCsrfForm [name="csrfmiddlewaretoken"]');
+        return input ? input.value : getCookie('csrftoken');
+    }
+
     // Honest actuator control: show the real 'sent' / 'queued' outcome the API
     // returns instead of pretending the physical action was confirmed.
     function controlActuator(actuatorId, state, deviceName) {
-        const csrftoken = getCookie('csrftoken');
+        const csrftoken = getCsrfToken();
         const statusEl = document.getElementById('aac-status-' + actuatorId);
 
         function setStatus(cls, html) {
@@ -809,11 +826,10 @@
         });
     }
 
-    // Toggle Master Automation. Now that CACHES is a shared DatabaseCache, this
-    // toggle is actually visible to the Celery worker/beat, so it gates real
-    // automation instead of only flipping a per-process flag.
+    // The shared cache makes this toggle visible to the web process and any
+    // automation worker/beat process instead of keeping a per-process flag.
     function toggleMasterAutomation(enabled) {
-        const csrftoken = getCookie('csrftoken');
+        const csrftoken = getCsrfToken();
         const note = document.getElementById('automationInlineNote');
 
         fetch('/iot/api/automation/toggle/', {
@@ -862,7 +878,7 @@
             return;
         }
 
-        const csrftoken = getCookie('csrftoken');
+        const csrftoken = getCsrfToken();
 
         // Show loading state
         const saveBtn = document.querySelector('#addScheduleModal .btn-primary');
@@ -920,7 +936,7 @@
 
     // Toggle Schedule
     function toggleSchedule(scheduleId) {
-        const csrftoken = getCookie('csrftoken');
+        const csrftoken = getCsrfToken();
 
         fetch(`/iot/api/schedules/${scheduleId}/toggle/`, {
             method: 'POST',
@@ -942,7 +958,7 @@
     function deleteSchedule(scheduleId) {
         if (!confirm('Delete this schedule?')) return;
 
-        const csrftoken = getCookie('csrftoken');
+        const csrftoken = getCsrfToken();
 
         fetch(`/iot/api/schedules/${scheduleId}/delete/`, {
             method: 'DELETE',
@@ -961,7 +977,7 @@
 
     // Toggle Feed Schedule
     function toggleFeedSchedule(scheduleId) {
-        const csrftoken = getCookie('csrftoken');
+        const csrftoken = getCsrfToken();
 
         fetch(`/feeding/api/schedules/${scheduleId}/toggle_active/`, {
             method: 'POST',
@@ -989,7 +1005,7 @@
     function deleteFeedSchedule(scheduleId) {
         if (!confirm('Delete this feeding schedule?')) return;
 
-        const csrftoken = getCookie('csrftoken');
+        const csrftoken = getCsrfToken();
 
         fetch(`/feeding/api/schedules/${scheduleId}/`, {
             method: 'DELETE',
@@ -1029,7 +1045,7 @@
         const criteria = {};
         criteria[sensorType] = operator + sensorValue;
 
-        const csrftoken = getCookie('csrftoken');
+        const csrftoken = getCsrfToken();
 
         // Show loading state
         const saveBtn = document.querySelector('#addRuleModal .btn-success');
@@ -1080,7 +1096,7 @@
 
     // Toggle Rule
     function toggleRule(ruleId) {
-        const csrftoken = getCookie('csrftoken');
+        const csrftoken = getCsrfToken();
 
         fetch(`/iot/api/rules/${ruleId}/toggle/`, {
             method: 'POST',
@@ -1102,7 +1118,7 @@
     function deleteRule(ruleId) {
         if (!confirm('Delete this rule?')) return;
 
-        const csrftoken = getCookie('csrftoken');
+        const csrftoken = getCsrfToken();
 
         fetch(`/iot/api/rules/${ruleId}/delete/`, {
             method: 'DELETE',
@@ -1301,6 +1317,8 @@
                             <option value="humidity">Humidity</option>
                             <option value="rain">Rain</option>
                             <option value="distance">Feeder Level</option>
+                            <option value="light_level_percentage">LDR Light Level (%)</option>
+                            <option value="light_raw">LDR Raw ADC (0-4095)</option>
                         </select>
                     </div>
 

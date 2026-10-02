@@ -38,6 +38,7 @@ urlpatterns = [
     path('security/', include('security.urls')),  # Security & notifications
     path('sms/', include(('sms.urls', 'sms'), namespace='sms')),  # SMS notifications
     path('marketplace/', include(('marketplace.urls', 'marketplace'), namespace='marketplace')),
+    path('api/mobile/', include(('mobile_api.urls', 'mobile_api'), namespace='mobile_api')),
 
     # Authentication. Legacy URL names remain available for existing templates,
     # while allauth provides email/password and Google OAuth/OIDC flows.

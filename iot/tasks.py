@@ -246,6 +246,25 @@ def check_and_execute_rules():
     
     executed_count = 0
     
+    # Sensor readings can come from separate controllers (for example, the LDR
+    # is attached to the door/light ESP32 while temperature is attached to the
+    # environment ESP32). Resolve each criterion from the newest reading that
+    # actually contains that measurement instead of hard-coding one device.
+    sensor_fields = {
+        'temperature': 'temperature',
+        'humidity': 'humidity',
+        'distance': 'feeder_level',
+        'rain': 'rain_detected',
+        'light_level_percentage': 'light_level_percentage',
+        'light_raw': 'light_raw',
+    }
+    action_actuator_types = {
+        'open_door': 'door',
+        'close_door': 'door',
+        'turn_on_light': 'light',
+        'turn_off_light': 'light',
+    }
+
     # Get all active sensor-based rules
     rules = AutomationRule.objects.filter(
         is_active=True,
@@ -254,35 +273,20 @@ def check_and_execute_rules():
     
     for rule in rules:
         try:
-            # Get latest sensor readings from ESP32
-            esp32_device = Device.objects.filter(
-                device_id='kamotech_esp32_001'
-            ).first()
-            
-            if not esp32_device:
-                continue
-            
-            # Get latest sensor reading
-            latest_reading = SensorReading.objects.filter(
-                device=esp32_device
-            ).order_by('-timestamp').first()
-            
-            if not latest_reading:
-                continue
-            
             # Check if rule conditions are met
             criteria = rule.criteria
             conditions_met = True
+            sensor_values = {}
             
             for key, value in criteria.items():
                 # Parse operator and threshold (e.g., '>30' -> operator='>', threshold='30')
-                operator = ''
-                threshold_str = value
+                operator = '=='
+                threshold_str = str(value).strip()
                 
                 for op in ['>=', '<=', '==', '>', '<']:
-                    if value.startswith(op):
+                    if threshold_str.startswith(op):
                         operator = op
-                        threshold_str = value[len(op):].strip()
+                        threshold_str = threshold_str[len(op):].strip()
                         break
                 
                 try:
@@ -291,21 +295,36 @@ def check_and_execute_rules():
                     conditions_met = False
                     break
                 
-                # Get actual sensor value
-                actual_value = None
-                if key == 'temperature':
-                    actual_value = latest_reading.temperature
-                elif key == 'humidity':
-                    actual_value = latest_reading.humidity
-                elif key == 'distance':
-                    actual_value = latest_reading.distance
-                elif key == 'rain':
-                    actual_value = 1 if latest_reading.rain_detected else 0
-                    threshold = 1  # Rain detected
+                field_name = sensor_fields.get(key)
+                if not field_name:
+                    conditions_met = False
+                    logger.warning("Rule %s uses unsupported sensor %s", rule.name, key)
+                    break
+
+                reading_filter = {f'{field_name}__isnull': False}
+                # Prefer a measurement reported by the controlled device. This
+                # is important for the LDR on the dedicated door/light board.
+                latest_reading = SensorReading.objects.filter(
+                    device=rule.actuator,
+                    **reading_filter,
+                ).order_by('-timestamp').first()
+                if latest_reading is None:
+                    latest_reading = SensorReading.objects.filter(
+                        **reading_filter,
+                    ).order_by('-timestamp').first()
+
+                actual_value = (
+                    getattr(latest_reading, field_name)
+                    if latest_reading is not None else None
+                )
+                if key == 'rain' and actual_value is not None:
+                    actual_value = 1 if actual_value else 0
                 
                 if actual_value is None:
                     conditions_met = False
                     break
+
+                sensor_values[key] = actual_value
                 
                 # Evaluate condition
                 if operator == '>':
@@ -341,16 +360,28 @@ def check_and_execute_rules():
                 }
                 
                 new_state = state_map.get(action, 'off')
+                actuator_type = action_actuator_types.get(action)
+                if actuator_type is None:
+                    logger.warning("Rule %s uses unsupported action %s", rule.name, action)
+                    continue
                 
                 # Check if already in this state (avoid repeated executions)
-                current_state = ActuatorState.objects.filter(device=device).first()
+                current_state = ActuatorState.objects.filter(
+                    device=device,
+                    actuator_type=actuator_type,
+                ).first()
                 if current_state and current_state.current_state == new_state:
                     continue  # Already in desired state
                 
                 # Update actuator state
                 actuator_state, created = ActuatorState.objects.get_or_create(
                     device=device,
-                    defaults={'current_state': new_state, 'mode': 'auto'}
+                    actuator_type=actuator_type,
+                    defaults={
+                        'current_state': new_state,
+                        'mode': 'auto',
+                        'last_triggered_by': rule.name,
+                    }
                 )
                 
                 if not created:
@@ -364,7 +395,13 @@ def check_and_execute_rules():
                     device=device,
                     action=STATE_TO_ACTION.get(new_state, 'turn_on'),
                     source='rule',
-                    triggered_by=rule.name
+                    triggered_by=rule.name,
+                    rule=rule,
+                    metadata={
+                        'actuator_type': actuator_type,
+                        'new_state': new_state,
+                        'sensor_values': sensor_values,
+                    },
                 )
                 
                 executed_count += 1

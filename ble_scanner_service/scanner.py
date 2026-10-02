@@ -257,6 +257,9 @@ class PortableBLEScanner:
                 async with BleakScanner(
                     detection_callback=self._on_advertisement,
                     scanning_mode=self.config.scan_mode,
+                    # Repeated packets are fresh sightings even when their
+                    # payload/RSSI is unchanged. BlueZ suppresses them by default.
+                    bluez={'filters': {'DuplicateData': True}},
                 ):
                     logger.info('Bluetooth scanner is listening for advertisements.')
                     stopped = await self._wait(session_seconds)

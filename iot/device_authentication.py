@@ -6,11 +6,15 @@ separate provisioned and revocable credential per device, like BLE receivers.
 """
 
 import secrets
+import logging
 from functools import wraps
 
 from django.conf import settings
 from django.http import JsonResponse
 from rest_framework.permissions import BasePermission
+
+
+logger = logging.getLogger(__name__)
 
 
 def _presented_key(request):
@@ -20,7 +24,25 @@ def _presented_key(request):
 def valid_device_key(request):
     expected = getattr(settings, "IOT_DEVICE_API_KEY", "").strip()
     presented = _presented_key(request)
-    return bool(expected and presented and secrets.compare_digest(expected, presented))
+    if not expected:
+        logger.error("Device authentication is unavailable: server key is not configured")
+        return False
+    if not presented:
+        logger.warning(
+            "Device authentication rejected: key header missing on %s",
+            request.path,
+        )
+        return False
+    if not secrets.compare_digest(expected, presented):
+        logger.warning(
+            "Device authentication rejected: key mismatch on %s "
+            "(received length %s, expected length %s)",
+            request.path,
+            len(presented),
+            len(expected),
+        )
+        return False
+    return True
 
 
 class HasLegacyDeviceKey(BasePermission):

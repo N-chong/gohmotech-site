@@ -19,8 +19,9 @@ from django.utils import timezone
 # call it offline. Callers may override per-context.
 DEFAULT_ONLINE_WINDOW_SECONDS = 90
 
-# The single physical controller that drives the goat-house door/light/feeder.
-MAIN_CONTROLLER_DEVICE_ID = 'kamotech_esp32_001'
+# Primary door/light controller. The environment/feeder board is a separate
+# device and must not determine whether these controls are online.
+MAIN_CONTROLLER_DEVICE_ID = 'gohmotech_esp32_002'
 
 
 def device_last_seen(device):
@@ -73,6 +74,7 @@ def controller_status(window_seconds=DEFAULT_ONLINE_WINDOW_SECONDS):
     """Online summary for the main controller, safe on an empty database."""
     device = get_main_controller()
     return {
+        'device_id': MAIN_CONTROLLER_DEVICE_ID,
         'device': device,
         'configured': device is not None,
         'online': is_device_online(device, window_seconds) if device else False,

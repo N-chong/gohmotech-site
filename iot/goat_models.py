@@ -8,6 +8,7 @@ import subprocess
 import re
 import logging
 import uuid as uuid_lib
+from urllib.parse import urlsplit, urlunsplit
 
 logger = logging.getLogger(__name__)
 
@@ -833,11 +834,9 @@ class IPCamera(models.Model):
         if not self.mac_address:
             return self.ip_address
         
-        # If we have a recent IP and no recent errors, use it
-        if self.ip_address and self.status == 'active':
-            return self.ip_address
-        
-        # Try to resolve from MAC if available
+        # Always try the MAC first.  An abrupt joint power loss leaves the
+        # database status as ``active`` even though DHCP may assign a different
+        # address during the next boot.
         resolved_ip = self.resolve_ip_from_mac()
         if resolved_ip:
             # Update stored IP if different
@@ -852,9 +851,9 @@ class IPCamera(models.Model):
     def get_stream_url(self):
         """Get the appropriate stream URL based on camera type"""
         if self.rtsp_url:
-            return self.rtsp_url
+            return self._url_with_current_ip(self.rtsp_url)
         elif self.http_url:
-            return self.http_url
+            return self._url_with_current_ip(self.http_url)
         else:
             # Get current IP (resolves from MAC if needed)
             ip_address = self.get_current_ip()
@@ -869,6 +868,35 @@ class IPCamera(models.Model):
                 auth = f"{self.username}:{self.password}@" if self.username else ""
                 return f"http://{auth}{ip_address}:{self.port}/video"
         return None
+
+    def _url_with_current_ip(self, configured_url):
+        """Keep a configured path/credentials while following a DHCP address.
+
+        Camera URLs historically stored the IP in two places: ``ip_address``
+        and the full stream URL.  Replacing only ``ip_address`` therefore did
+        not affect reconnects.  A configured MAC makes it safe to substitute
+        the currently resolved host without exposing or rebuilding credentials.
+        """
+        if not configured_url or not self.mac_address:
+            return configured_url
+
+        current_ip = self.get_current_ip()
+        if not current_ip:
+            return configured_url
+
+        try:
+            parsed = urlsplit(configured_url)
+            if not parsed.hostname or parsed.hostname == current_ip:
+                return configured_url
+
+            userinfo, separator, _ = parsed.netloc.rpartition('@')
+            prefix = f'{userinfo}{separator}' if separator else ''
+            host = f'[{current_ip}]' if ':' in current_ip else current_ip
+            port = f':{parsed.port}' if parsed.port else ''
+            return urlunsplit(parsed._replace(netloc=f'{prefix}{host}{port}'))
+        except (TypeError, ValueError):
+            logger.warning('Could not update the stream host for camera %s', self.name)
+            return configured_url
     
     def get_snapshot_url(self):
         """Get the snapshot URL"""

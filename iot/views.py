@@ -14,6 +14,8 @@ from django.db.models import Avg, Max, Min, Count, Q, Sum
 from datetime import timedelta
 import logging
 import json
+import base64
+import re
 
 logger = logging.getLogger(__name__)
 from .models import Device, SensorData, Alert, ActuatorState, AutomationRule, ActuationLog, SensorReading
@@ -26,10 +28,60 @@ from .forms import BLEBeaconForm, GoatForm
 from .ble_services import build_tracking_snapshot
 from .weather_service import get_farm_weather
 from .status_utils import (
-    is_device_online, controller_status, system_status,
+    MAIN_CONTROLLER_DEVICE_ID, is_device_online, controller_status, system_status,
 )
 from .device_authentication import HasLegacyDeviceKey
 from .goat_photos import photo_slots, prepared_standard_photos, save_standard_photo
+
+
+def _prepare_time_schedule_for_display(schedule):
+    """Attach stable presentation fields to old and current schedule records."""
+    criteria = schedule.criteria if isinstance(schedule.criteria, dict) else {}
+    raw_time = (
+        criteria.get('time')
+        or criteria.get('schedule_time')
+        or criteria.get('scheduled_time')
+    )
+
+    if hasattr(raw_time, 'strftime'):
+        display_time = raw_time.strftime('%H:%M')
+    else:
+        display_time = str(raw_time or '').strip()
+
+    # Some early schedule rows only preserved the time in their generated name.
+    if not display_time:
+        match = re.search(r'\bat\s+(\d{1,2}:\d{2})\b', schedule.name or '', re.IGNORECASE)
+        if match:
+            display_time = match.group(1)
+
+    action_fallback = {
+        'open_door': 'Open',
+        'close_door': 'Close',
+        'turn_on_light': 'On',
+        'turn_off_light': 'Off',
+    }
+    raw_action = criteria.get('action')
+    display_action = (
+        str(raw_action).replace('_', ' ').title()
+        if raw_action
+        else action_fallback.get(schedule.action, schedule.get_action_display())
+    )
+
+    days = criteria.get('days_of_week') or []
+    day_names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    valid_days = []
+    for day in days:
+        try:
+            day_index = int(day)
+        except (TypeError, ValueError):
+            continue
+        if 0 <= day_index < len(day_names):
+            valid_days.append(day_names[day_index])
+
+    schedule.display_time = display_time or 'Time not set'
+    schedule.display_action = display_action
+    schedule.display_days = ', '.join(valid_days) if valid_days else 'Every day'
+    return schedule
 
 
 @farm_owner_required
@@ -333,7 +385,7 @@ def dashboard_modern(request):
         return redirect('iot:owner_dashboard')
     """Modern dashboard with farm map visualization"""
     devices = Device.objects.filter(is_active=True)[:8]  # Show first 8 active devices
-    alerts = Alert.objects.filter(is_resolved=False).order_by('-created_at')[:5]
+    alerts = Alert.objects.filter(is_resolved=False).select_related('device').order_by('-created_at')[:5]
     
     # Add severity class for badge colors
     for alert in alerts:
@@ -349,21 +401,28 @@ def dashboard_modern(request):
     recent_data = SensorData.objects.filter(timestamp__gte=one_hour_ago)
     
     # Get latest Kamotech ESP32 sensor readings (DHT21)
-    kamotech_device = Device.objects.filter(device_id='kamotech_esp32_001').first()
+    kamotech_device = Device.objects.filter(
+        device_id=MAIN_CONTROLLER_DEVICE_ID
+    ).first()
     latest_sensor_reading = None
     if kamotech_device:
         latest_sensor_reading = SensorReading.objects.filter(device=kamotech_device).order_by('-timestamp').first()
     
     # Use Kamotech ESP32 data if available, otherwise fall back to old SensorData
-    if latest_sensor_reading and latest_sensor_reading.temperature and latest_sensor_reading.humidity:
+    environmental_averages = recent_data.aggregate(
+        temperature=Avg('value', filter=Q(sensor_type='temperature')),
+        humidity=Avg('value', filter=Q(sensor_type='humidity')),
+        soil=Avg('value', filter=Q(sensor_type='soil_moisture')),
+    )
+    if latest_sensor_reading and latest_sensor_reading.temperature is not None and latest_sensor_reading.humidity is not None:
         temp_avg = latest_sensor_reading.temperature
         humidity_avg = latest_sensor_reading.humidity
     else:
         # Calculate averages from old SensorData model
-        temp_avg = recent_data.filter(sensor_type='temperature').aggregate(avg=Avg('value'))['avg']
-        humidity_avg = recent_data.filter(sensor_type='humidity').aggregate(avg=Avg('value'))['avg']
+        temp_avg = environmental_averages['temperature']
+        humidity_avg = environmental_averages['humidity']
     
-    soil_avg = recent_data.filter(sensor_type='soil_moisture').aggregate(avg=Avg('value'))['avg']
+    soil_avg = environmental_averages['soil']
     
     # Livestock statistics (honest inventory aggregates — always populated)
     total_goats = 0
@@ -375,6 +434,7 @@ def dashboard_modern(request):
     vaccinations_due = 0
     if Goat:
         active_qs = Goat.objects.filter(is_active=True)
+        soon = timezone.localdate() + timedelta(days=30)
         counts = active_qs.aggregate(
             total=Count('id'),
             healthy=Count('id', filter=Q(health_status='healthy')),
@@ -382,6 +442,7 @@ def dashboard_modern(request):
             sick=Count('id', filter=Q(health_status='sick')),
             quarantine=Count('id', filter=Q(health_status='quarantine')),
             missing=Count('id', filter=Q(status='missing')),
+            vaccinations=Count('id', filter=Q(next_due_date__isnull=False, next_due_date__lte=soon)),
         )
         total_goats = counts['total'] or 0
         healthy_goats = counts['healthy'] or 0
@@ -390,10 +451,7 @@ def dashboard_modern(request):
         quarantine_goats = counts['quarantine'] or 0
         missing_goats = counts['missing'] or 0
         # Vaccinations overdue or coming due within 30 days.
-        soon = timezone.localdate() + timedelta(days=30)
-        vaccinations_due = active_qs.filter(
-            next_due_date__isnull=False, next_due_date__lte=soon
-        ).count()
+        vaccinations_due = counts['vaccinations'] or 0
 
     # Real active-alert count (replaces the fake `default:3` in the template).
     active_alert_count = Alert.objects.filter(is_resolved=False).count()
@@ -439,18 +497,16 @@ def dashboard_modern(request):
     feed_capacity_grams = 0
     feed_level_time = None
     if FeedLevel:
-        feed_levels = FeedLevel.objects.all()
-        if feed_levels.exists():
-            feed_aggregate = feed_levels.aggregate(
-                total=Sum('current_level_grams'),
-                capacity=Sum('capacity_grams'),
-                latest=Max('updated_at')
-            )
-            feed_total_grams = feed_aggregate['total'] or 0
-            feed_capacity_grams = feed_aggregate['capacity'] or 0
-            feed_level_time = feed_aggregate['latest']
-            if feed_capacity_grams > 0:
-                feed_level_percent = (feed_total_grams / feed_capacity_grams) * 100
+        feed_aggregate = FeedLevel.objects.aggregate(
+            total=Sum('current_level_grams'),
+            capacity=Sum('capacity_grams'),
+            latest=Max('updated_at')
+        )
+        feed_total_grams = feed_aggregate['total'] or 0
+        feed_capacity_grams = feed_aggregate['capacity'] or 0
+        feed_level_time = feed_aggregate['latest']
+        if feed_capacity_grams > 0:
+            feed_level_percent = (feed_total_grams / feed_capacity_grams) * 100
 
     weather_info = get_farm_weather()
     ble_tracking = build_tracking_snapshot()
@@ -745,15 +801,21 @@ def monitoring_dashboard(request):
     # Get active devices
     devices = Device.objects.filter(is_active=True)
     
-    # Get recent sensor data (last hour)
+    # Current firmware writes combined snapshots to SensorReading. SensorData
+    # is retained only as a fallback for older installations.
     one_hour_ago = timezone.now() - timedelta(hours=1)
-    recent_data = SensorData.objects.filter(timestamp__gte=one_hour_ago).select_related('device')
-    
-    # Get latest DHT21 sensor readings (kamotech esp32)
-    latest_sensor_reading = None
-    kamotech_device = Device.objects.filter(device_id='kamotech_esp32_001').first()
-    if kamotech_device:
-        latest_sensor_reading = SensorReading.objects.filter(device=kamotech_device).order_by('-timestamp').first()
+    recent_readings = SensorReading.objects.filter(
+        timestamp__gte=one_hour_ago
+    ).select_related('device').order_by('-timestamp')[:50]
+    recent_data = SensorData.objects.filter(
+        timestamp__gte=one_hour_ago
+    ).select_related('device').order_by('-timestamp')[:50]
+
+    # Temperature/humidity now come from the Environment/Feeder board, not the
+    # Door/Light board. Select by actual populated fields instead of a fixed ID.
+    latest_sensor_reading = SensorReading.objects.filter(
+        Q(temperature__isnull=False) | Q(humidity__isnull=False)
+    ).select_related('device').order_by('-timestamp').first()
     
     # Get all latest environmental readings
     latest_environmental_readings = []
@@ -765,12 +827,35 @@ def monitoring_dashboard(request):
     # Get active alerts
     active_alerts = Alert.objects.filter(is_resolved=False).order_by('-created_at')[:20]
     
-    # Environmental conditions (latest readings)
+    # Environmental conditions from the active aggregated SensorReading table.
+    # Query each measurement independently because the split ESP32 boards own
+    # different sensors. Fall back to legacy SensorData when necessary.
     latest_conditions = {}
+    condition_fields = {
+        'temperature': 'temperature',
+        'humidity': 'humidity',
+        'soil_moisture': 'soil_moisture',
+        'light_level': 'light_level_percentage',
+        'air_quality': 'air_quality_raw',
+    }
+    for condition_name, model_field in condition_fields.items():
+        latest = SensorReading.objects.filter(
+            **{f'{model_field}__isnull': False}
+        ).select_related('device').order_by('-timestamp').first()
+        if latest:
+            latest_conditions[condition_name] = {
+                'value': getattr(latest, model_field),
+                'timestamp': latest.timestamp,
+                'device': latest.device,
+            }
+
     for sensor_type in ['temperature', 'humidity', 'soil_moisture', 'light_intensity']:
+        target_name = 'light_level' if sensor_type == 'light_intensity' else sensor_type
+        if target_name in latest_conditions:
+            continue
         latest = SensorData.objects.filter(sensor_type=sensor_type).order_by('-timestamp').first()
         if latest:
-            latest_conditions[sensor_type] = latest
+            latest_conditions[target_name] = latest
     
     # Grass health status
     if GrassHealthLog:
@@ -829,7 +914,9 @@ def monitoring_dashboard(request):
     
     context = {
         'devices': devices,
-        'recent_data': recent_data[:50],
+        'recent_readings': recent_readings,
+        'recent_data': recent_data,
+        'recent_reading_count': len(recent_readings) or len(recent_data),
         'active_alerts': active_alerts,
         'latest_conditions': latest_conditions,
         'latest_sensor_reading': latest_sensor_reading,  # DHT21 data
@@ -855,13 +942,37 @@ def monitoring_dashboard(request):
 # ==================== Camera Streaming Views ====================
 
 from django.http import StreamingHttpResponse, JsonResponse, HttpResponse
+from django.core.handlers.asgi import ASGIRequest
 from django.views.decorators.http import require_http_methods
+from asgiref.sync import sync_to_async
 from .goat_models import IPCamera
 from .camera_utils import camera_manager
+import asyncio
 import time
 
 
-def generate_mjpeg_stream(camera_id, quality=85, fps=20):
+def _mjpeg_part(frame_bytes, sequence=0, captured_at=None):
+    return (b'--frame\r\n'
+            b'Content-Type: image/jpeg\r\n'
+            b'Cache-Control: no-cache, no-store, must-revalidate\r\n'
+            b'Pragma: no-cache\r\n'
+            b'Expires: 0\r\n' +
+            f'Content-Length: {len(frame_bytes)}\r\nX-Frame-Sequence: {sequence}\r\n'.encode() +
+            f'X-Frame-Captured-At: {captured_at if captured_at is not None else time.time():.6f}\r\n'.encode() +
+            b'\r\n' + frame_bytes + b'\r\n')
+
+
+def _camera_stream_part(frame_bytes, sequence, captured_at, transport):
+    if transport == 'sse':
+        # Genuine SSE framing, not a MIME override on binary MJPEG. Cloudflare
+        # Tunnel explicitly supports flushing text/event-stream responses.
+        payload = json.dumps({'sequence': sequence, 'captured_at': captured_at,
+                              'jpeg': base64.b64encode(frame_bytes).decode('ascii')}, separators=(',', ':'))
+        return f'event: frame\nid: {sequence}\ndata: {payload}\n\n'.encode('ascii')
+    return _mjpeg_part(frame_bytes, sequence, captured_at)
+
+
+def generate_mjpeg_stream(stream, camera_id, quality=85, fps=20, max_width=1280, transport='mjpeg'):
     """
     Generator function for MJPEG streaming
     
@@ -874,43 +985,83 @@ def generate_mjpeg_stream(camera_id, quality=85, fps=20):
     Yields:
         bytes: MJPEG frame data
     """
-    stream = camera_manager.get_stream(camera_id)
-    
-    if not stream:
-        # Return a blank/error frame
-        yield b'--frame\r\nContent-Type: image/jpeg\r\n\r\n\r\n'
-        return
-    
-    last_frame_time = time.time()
-    frame_count = 0
+    last_frame_time = time.monotonic()
     
     quality = int(max(40, min(95, quality)))
     fps = max(1, min(25, float(fps)))
     interval = 1.0 / fps
 
-    while True:
-        # Adjustable quality and FPS for latency tuning
-        frame_bytes = stream.get_jpeg_frame(quality=quality)
-        
-        if frame_bytes:
-            # Add cache control headers to prevent browser caching
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n'
-                   b'Cache-Control: no-cache, no-store, must-revalidate\r\n'
-                   b'Pragma: no-cache\r\n'
-                   b'Expires: 0\r\n'
-                   b'\r\n' + frame_bytes + b'\r\n')
-            
-            frame_count += 1
-            # Delay based on target FPS
-            time.sleep(interval)
-        else:
-            # No frame available - wait longer
-            time.sleep(0.2)
-            
-            # Check if stream is dead (no frames for 10 seconds)
-            if time.time() - last_frame_time > 10:
-                break
+    logger.info("MJPEG client opened camera %s feed", camera_id)
+    last_sequence = None
+    delivered = 0
+    last_delivery_log = time.monotonic()
+    try:
+        if transport == 'sse':
+            yield b': camera stream\n\n'
+        while True:
+            sequence, frame_bytes, captured_at = stream.get_jpeg_packet(
+                quality=quality, max_width=max_width, include_captured_at=True)
+
+            if frame_bytes and sequence != last_sequence:
+                last_sequence = sequence
+                delivered += 1
+                if time.monotonic() - last_delivery_log >= 30:
+                    logger.info('MJPEG camera %s delivering: frames=%s sequence=%s', camera_id, delivered, sequence)
+                    last_delivery_log = time.monotonic()
+                last_frame_time = time.monotonic()
+                yield _camera_stream_part(frame_bytes, sequence, captured_at, transport)
+                time.sleep(interval)
+            else:
+                time.sleep(min(interval / 4, 0.02) if frame_bytes else 0.2)
+                if time.monotonic() - last_frame_time > 12:
+                    logger.warning(
+                        "MJPEG camera %s feed ended after 12s without a frame",
+                        camera_id,
+                    )
+                    break
+    except GeneratorExit:
+        return
+    finally:
+        logger.info("MJPEG camera %s closed: delivered=%s last_sequence=%s", camera_id, delivered, last_sequence)
+
+
+async def generate_mjpeg_stream_async(stream, camera_id, quality=85, fps=20, max_width=1280, transport='mjpeg'):
+    """ASGI-safe MJPEG iterator for Daphne; never buffers the infinite feed."""
+    last_frame_time = time.monotonic()
+    quality = int(max(40, min(95, quality)))
+    fps = max(1, min(25, float(fps)))
+    interval = 1.0 / fps
+    get_jpeg = sync_to_async(stream.get_jpeg_packet, thread_sensitive=False)
+    last_sequence = None
+    delivered = 0
+    last_delivery_log = time.monotonic()
+
+    logger.info("ASGI MJPEG client opened camera %s feed", camera_id)
+    try:
+        if transport == 'sse':
+            yield b': camera stream\n\n'
+        while True:
+            sequence, frame_bytes, captured_at = await get_jpeg(
+                quality=quality, max_width=max_width, include_captured_at=True)
+            if frame_bytes and sequence != last_sequence:
+                last_sequence = sequence
+                delivered += 1
+                if time.monotonic() - last_delivery_log >= 30:
+                    logger.info('ASGI MJPEG camera %s delivering: frames=%s sequence=%s', camera_id, delivered, sequence)
+                    last_delivery_log = time.monotonic()
+                last_frame_time = time.monotonic()
+                yield _camera_stream_part(frame_bytes, sequence, captured_at, transport)
+                await asyncio.sleep(interval)
+            else:
+                await asyncio.sleep(min(interval / 4, 0.02) if frame_bytes else 0.2)
+                if time.monotonic() - last_frame_time > 12:
+                    logger.warning(
+                        "ASGI MJPEG camera %s feed ended after 12s without a frame",
+                        camera_id,
+                    )
+                    break
+    finally:
+        logger.info("ASGI MJPEG camera %s closed: delivered=%s last_sequence=%s", camera_id, delivered, last_sequence)
 
 
 @farm_access_required
@@ -924,28 +1075,58 @@ def camera_feed(request, camera_id):
     Returns:
         StreamingHttpResponse: MJPEG stream with no-cache headers
     """
-    # Verify camera exists and is active
+    # Resolve/create the shared stream inside this synchronous view so ORM work
+    # never leaks into the ASGI response iterator.
     get_object_or_404(IPCamera, id=camera_id, is_active=True)
+    stream = camera_manager.get_stream(camera_id)
+    if not stream:
+        logger.error("Camera %s stream manager could not create a stream", camera_id)
+        return HttpResponse("Camera stream unavailable", status=503)
     
     try:
-        quality = int(request.GET.get('quality', 85))
+        quality = int(request.GET.get('quality', 50))
     except (TypeError, ValueError):
-        quality = 85
+        quality = 50
 
     try:
-        fps = float(request.GET.get('fps', 20))
+        fps = float(request.GET.get('fps', 6))
     except (TypeError, ValueError):
-        fps = 20
+        fps = 6
 
-    response = StreamingHttpResponse(
-        generate_mjpeg_stream(camera_id, quality=quality, fps=fps),
-        content_type='multipart/x-mixed-replace; boundary=frame'
-    )
+    try:
+        max_width = max(320, min(1280, int(request.GET.get('width', 320))))
+    except (TypeError, ValueError):
+        max_width = 320
+
+    transport = request.GET.get('transport', 'mjpeg')
+    if transport == 'jpeg':
+        # One latest packet per completed request: no ordered transport queue of
+        # old frames, even when a tunnel/client is slower than capture.
+        sequence, frame_bytes, captured_at = stream.get_jpeg_packet(
+            quality=max(40, min(95, quality)), max_width=max_width, include_captured_at=True)
+        response = HttpResponse(frame_bytes or b'', status=200 if frame_bytes else 204, content_type='image/jpeg')
+        response['X-Frame-Sequence'] = str(sequence)
+        response['X-Frame-Captured-At'] = f'{captured_at:.6f}'
+    else:
+        transport = 'sse' if transport == 'sse' else 'mjpeg'
+        iterator = (
+            generate_mjpeg_stream_async(stream, camera_id, quality=quality, fps=fps, max_width=max_width, transport=transport)
+            if isinstance(request, ASGIRequest)
+            else generate_mjpeg_stream(stream, camera_id, quality=quality, fps=fps, max_width=max_width, transport=transport)
+        )
+        response = StreamingHttpResponse(
+            iterator,
+            content_type='text/event-stream' if transport == 'sse' else 'multipart/x-mixed-replace; boundary=frame'
+        )
     
     # Disable caching for real-time streaming
-    response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response['Cache-Control'] = 'no-cache, no-store, must-revalidate, no-transform'
     response['Pragma'] = 'no-cache'
     response['Expires'] = '0'
+    response['X-Accel-Buffering'] = 'no'
+    # A per-connection time origin lets clients measure capture-to-display age
+    # conservatively without requiring their clock to match the Pi's clock.
+    response['X-Stream-Started-At'] = f'{time.time():.6f}'
     
     return response
 
@@ -967,6 +1148,7 @@ def camera_connect(request):
         JsonResponse: Status of the operation
     """
     import json
+    from urllib.parse import quote
     data = json.loads(request.body)
     
     position = data.get('position')
@@ -984,16 +1166,21 @@ def camera_connect(request):
     # Determine port and stream paths based on camera type
     if camera_type == 'rtsp':
         port = 554
-        # Build RTSP URL with credentials
-        auth_part = f"{username}:{password}@" if username and password else ""
+        # Encode credential delimiters before embedding them in the server-only URL.
+        auth_part = (
+            f"{quote(username, safe='')}:{quote(password, safe='')}@"
+            if username and password else ""
+        )
         # Common RTSP stream paths - try /stream first, camera will use get_stream_url() method
         rtsp_url = f"rtsp://{auth_part}{ip_address}:{port}/stream"
         http_url = ""
         stream_path = "/stream"
     else:  # wifi or http
         port = 80
-        # Build HTTP URL with credentials
-        auth_part = f"{username}:{password}@" if username and password else ""
+        auth_part = (
+            f"{quote(username, safe='')}:{quote(password, safe='')}@"
+            if username and password else ""
+        )
         # Common HTTP/MJPEG stream paths
         http_url = f"http://{auth_part}{ip_address}:{port}/video"
         rtsp_url = ""
@@ -1031,7 +1218,8 @@ def camera_connect(request):
         camera.is_active = True
         camera.save()
     
-    # Start the stream
+    # A saved endpoint change must replace any in-process stream holding the old URL.
+    camera_manager.stop_stream(camera.id)
     stream = camera_manager.get_stream(camera.id)
     
     if stream:
@@ -1125,6 +1313,13 @@ def camera_status(request, camera_id):
     """
     camera = get_object_or_404(IPCamera, id=camera_id)
     
+    managed_stream = camera_manager.get_existing_stream(camera_id)
+    stream_status = managed_stream.public_status() if managed_stream else {
+        'state': 'idle' if camera.is_active else 'stopped',
+        'message': '',
+        'has_frame': False,
+    }
+
     return JsonResponse({
         'id': camera.id,
         'name': camera.name,
@@ -1133,7 +1328,8 @@ def camera_status(request, camera_id):
         'status': camera.status,
         'last_connected': camera.last_connected.isoformat() if camera.last_connected else None,
         'camera_type': camera.camera_type,
-        'location': camera.location
+        'location': camera.location,
+        'stream': stream_status,
     })
 
 
@@ -1633,27 +1829,18 @@ def automation_control(request):
                     conditions.append(f"Feeder distance {operator} {numeric_value} cm")
                 elif key == 'goat_count':
                     conditions.append(f"Goat count {operator} {numeric_value}")
+                elif key == 'light_level_percentage':
+                    conditions.append(f"LDR light level {operator} {numeric_value}%")
+                elif key == 'light_raw':
+                    conditions.append(f"LDR raw ADC {operator} {numeric_value}")
         
         rule.condition_display = ' AND '.join(conditions) if conditions else 'No conditions'
     
-    # Format door and light schedules for display
+    # Normalize current and legacy criteria keys into explicit display fields.
     for schedule in door_schedules:
-        if 'time' in schedule.criteria:
-            schedule.time = schedule.criteria['time']
-        if 'action' in schedule.criteria:
-            schedule.action = schedule.criteria['action'].replace('_', ' ').title()
-        if 'days_of_week' in schedule.criteria:
-            days_map = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-            schedule.days = ', '.join([days_map[d] for d in schedule.criteria['days_of_week']])
-    
+        _prepare_time_schedule_for_display(schedule)
     for schedule in light_schedules:
-        if 'time' in schedule.criteria:
-            schedule.time = schedule.criteria['time']
-        if 'action' in schedule.criteria:
-            schedule.action = schedule.criteria['action'].replace('_', ' ').title()
-        if 'days_of_week' in schedule.criteria:
-            days_map = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-            schedule.days = ', '.join([days_map[d] for d in schedule.criteria['days_of_week']])
+        _prepare_time_schedule_for_display(schedule)
     
     # Get all actuator devices for rule creation
     actuator_device_ids = list(ActuatorState.objects.values_list('device_id', flat=True))
@@ -1856,27 +2043,18 @@ def automation_schedule(request):
                     conditions.append(f"Feeder distance {operator} {numeric_value} cm")
                 elif key == 'goat_count':
                     conditions.append(f"Goat count {operator} {numeric_value}")
+                elif key == 'light_level_percentage':
+                    conditions.append(f"LDR light level {operator} {numeric_value}%")
+                elif key == 'light_raw':
+                    conditions.append(f"LDR raw ADC {operator} {numeric_value}")
         
         rule.condition_display = ' AND '.join(conditions) if conditions else 'No conditions'
     
-    # Format door and light schedules for display
+    # Normalize current and legacy criteria keys into explicit display fields.
     for schedule in door_schedules:
-        if 'time' in schedule.criteria:
-            schedule.time = schedule.criteria['time']
-        if 'action' in schedule.criteria:
-            schedule.action = schedule.criteria['action'].replace('_', ' ').title()
-        if 'days_of_week' in schedule.criteria:
-            days_map = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-            schedule.days = ', '.join([days_map[d] for d in schedule.criteria['days_of_week']])
-    
+        _prepare_time_schedule_for_display(schedule)
     for schedule in light_schedules:
-        if 'time' in schedule.criteria:
-            schedule.time = schedule.criteria['time']
-        if 'action' in schedule.criteria:
-            schedule.action = schedule.criteria['action'].replace('_', ' ').title()
-        if 'days_of_week' in schedule.criteria:
-            days_map = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-            schedule.days = ', '.join([days_map[d] for d in schedule.criteria['days_of_week']])
+        _prepare_time_schedule_for_display(schedule)
     
     # Get all actuator devices for rule creation (devices that have actuator states OR are feeders)
     actuator_device_ids = list(ActuatorState.objects.values_list('device_id', flat=True))
