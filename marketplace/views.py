@@ -1,5 +1,7 @@
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
+import logging
+import os
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -8,8 +10,8 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Prefetch, Q
-from django.http import FileResponse
+from django.db.models import Count, OuterRef, Prefetch, Q, Subquery
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
@@ -84,6 +86,9 @@ from .support_services import (
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 def _add_model_validation_errors(form, exc):
     """Attach model validation errors without assuming model-only fields exist on the form."""
     if hasattr(exc, "error_dict"):
@@ -104,10 +109,11 @@ def _attach_images(listings):
 
 
 def _trusted_listing_seller_q():
-    """Community sellers need approval; the client smart-farm staff do not."""
+    """Community sellers need approval; trusted smart-farm roles do not."""
     return (
         Q(seller__is_staff=True)
         | Q(seller__is_superuser=True)
+        | Q(seller__groups__name=FARM_OWNER_GROUP_NAME)
         | Q(seller__seller_profile__status=SellerProfile.APPROVED)
     )
 
@@ -131,6 +137,7 @@ def _public_listing_queryset():
             goat__status="active",
             goat__is_active=True,
         )
+        .distinct()
     )
 
 
@@ -150,9 +157,79 @@ def _save_community_photos(goat, photos):
 def _conversation_inbox_name(user, conversation):
     if user.is_staff:
         return "marketplace:admin_inquiries"
-    if conversation.listing.seller_id == user.id:
+    if conversation.buyer_id == user.id:
+        return "marketplace:my_inquiries"
+    if can_manage_listing(user, conversation.listing):
         return "marketplace:seller_messages"
     return "marketplace:my_inquiries"
+
+
+def _messaging_conversations(user, *, seller_view=False, search_query=""):
+    """Return the lightweight, activity-sorted rows used by both messenger inboxes."""
+    latest_message = Message.objects.filter(conversation=OuterRef("pk")).order_by(
+        "-created_at", "-pk"
+    )
+    if seller_view:
+        conversations = Conversation.objects.filter(
+            manageable_listing_q(user, "listing__")
+        ).select_related(
+            "listing__goat", "listing__seller", "buyer"
+        )
+    else:
+        conversations = Conversation.objects.filter(buyer=user).select_related(
+            "listing__goat", "listing__seller", "listing__seller__seller_profile"
+        )
+
+    if search_query:
+        common_search = (
+            Q(listing__goat__goat_id__icontains=search_query)
+            | Q(listing__goat__name__icontains=search_query)
+            | Q(listing__goat__breed__icontains=search_query)
+        )
+        if seller_view:
+            conversations = conversations.filter(
+                common_search
+                | Q(buyer__first_name__icontains=search_query)
+                | Q(buyer__last_name__icontains=search_query)
+                | Q(buyer__username__icontains=search_query)
+            )
+        else:
+            conversations = conversations.filter(
+                common_search
+                | Q(listing__seller__first_name__icontains=search_query)
+                | Q(listing__seller__last_name__icontains=search_query)
+                | Q(listing__seller__username__icontains=search_query)
+                | Q(listing__seller__seller_profile__farm_name__icontains=search_query)
+            )
+
+    conversations = list(
+        conversations.prefetch_related(
+            Prefetch(
+                "listing__goat__images",
+                queryset=GoatImage.objects.only(
+                    "id", "goat_id", "image", "angle", "is_primary", "uploaded_at"
+                ).order_by("-uploaded_at"),
+                to_attr="marketplace_images",
+            )
+        )
+        .annotate(
+            message_count=Count("messages", distinct=True),
+            unread_count=Count(
+                "messages",
+                filter=Q(messages__is_read=False) & ~Q(messages__sender=user),
+                distinct=True,
+            ),
+            latest_message=Subquery(latest_message.values("body")[:1]),
+            latest_message_has_image=Subquery(
+                latest_message.values("image_attachment")[:1]
+            ),
+            latest_message_at=Subquery(latest_message.values("created_at")[:1]),
+        )
+        .order_by("-updated_at", "-pk")
+        .distinct()
+    )
+    _attach_images([item.listing for item in conversations])
+    return conversations
 
 
 def _safe_marketplace_redirect(request, fallback_name, **fallback_kwargs):
@@ -334,12 +411,7 @@ def listing_detail(request, pk):
         ),
         pk=pk,
     )
-    profile = getattr(listing.seller, "seller_profile", None)
-    seller_is_trusted = (
-        listing.seller.is_staff
-        or listing.seller.is_superuser
-        or (profile and profile.status == SellerProfile.APPROVED)
-    )
+    seller_is_trusted = is_approved_seller(listing.seller)
     may_preview = request.user.is_authenticated and (
         request.user.is_staff or request.user.id == listing.seller_id
     )
@@ -932,6 +1004,7 @@ def conversation_detail(request, pk):
     )
     viewer_is_buyer = conversation.buyer_id == request.user.id
     viewer_is_seller = can_manage_listing(request.user, conversation.listing)
+    messenger_seller_view = viewer_is_seller and not viewer_is_buyer
     if not (request.user.is_staff or viewer_is_buyer or viewer_is_seller):
         messages.error(request, "You do not have access to that conversation.")
         return redirect("marketplace:my_inquiries")
@@ -942,36 +1015,55 @@ def conversation_detail(request, pk):
     can_message = (viewer_is_buyer or viewer_is_seller) and conversation.status == Conversation.OPEN
 
     if request.method == "POST":
-        form = MessageForm(request.POST)
+        form = MessageForm(request.POST, request.FILES)
         if not can_message:
             messages.error(request, "This conversation is closed or read-only.")
         elif form.is_valid():
             message = form.save(commit=False)
             message.conversation = conversation
             message.sender = request.user
+            upload = form.cleaned_data.get("image_attachment")
+            if upload:
+                message.image_original_name = os.path.basename(upload.name)[:255]
+                message.image_content_type = upload.content_type[:100]
+                message.image_size = upload.size
             try:
                 message.full_clean()
             except ValidationError as exc:
                 _add_model_validation_errors(form, exc)
             else:
-                message.save()
-                Conversation.objects.filter(pk=conversation.pk).update(updated_at=timezone.now())
-                recipient = (
-                    conversation.listing.seller
-                    if viewer_is_buyer
-                    else conversation.buyer
-                )
-                create_marketplace_notification(
-                    recipient=recipient,
-                    actor=request.user,
-                    notification_type=MarketplaceNotification.MESSAGE,
-                    title=f"New message about {conversation.listing.goat.goat_id}",
-                    message=message.body,
-                    listing=conversation.listing,
-                    conversation=conversation,
-                    dedup_key=f"message:{message.pk}",
-                )
-                return redirect("marketplace:conversation", pk=pk)
+                try:
+                    # The savepoint keeps a failed storage write from poisoning
+                    # the surrounding request/test transaction.
+                    with transaction.atomic():
+                        message.save()
+                except (OSError, IOError):
+                    logger.exception(
+                        "Unable to store inquiry image for conversation %s",
+                        conversation.pk,
+                    )
+                    form.add_error(
+                        "image_attachment",
+                        "The image could not be uploaded. Please try again.",
+                    )
+                else:
+                    Conversation.objects.filter(pk=conversation.pk).update(updated_at=timezone.now())
+                    recipient = (
+                        conversation.listing.seller
+                        if viewer_is_buyer
+                        else conversation.buyer
+                    )
+                    create_marketplace_notification(
+                        recipient=recipient,
+                        actor=request.user,
+                        notification_type=MarketplaceNotification.MESSAGE,
+                        title=f"New message about {conversation.listing.goat.goat_id}",
+                        message=message.body or "Image attached.",
+                        listing=conversation.listing,
+                        conversation=conversation,
+                        dedup_key=f"message:{message.pk}",
+                    )
+                    return redirect("marketplace:conversation", pk=pk)
     else:
         form = MessageForm()
 
@@ -981,6 +1073,15 @@ def conversation_detail(request, pk):
     active_reservation = conversation.reservations.filter(
         status__in=[Reservation.PENDING, Reservation.ACCEPTED]
     ).first()
+    search_query = request.GET.get("q", "").strip()[:100]
+    sidebar_conversations = []
+    if not request.user.is_staff:
+        sidebar_conversations = _messaging_conversations(
+            request.user,
+            seller_view=messenger_seller_view,
+            search_query=search_query,
+        )
+    _attach_images([conversation.listing])
     return render(
         request,
         "marketplace/conversation.html",
@@ -991,45 +1092,73 @@ def conversation_detail(request, pk):
             "active_reservation": active_reservation,
             "viewer_is_buyer": viewer_is_buyer,
             "viewer_is_seller": viewer_is_seller,
+            "messenger_seller_view": messenger_seller_view,
             "can_message": can_message,
             "inbox_name": _conversation_inbox_name(request.user, conversation),
+            "conversations": sidebar_conversations,
+            "search_query": search_query,
         },
     )
 
 
 @login_required
-def my_inquiries(request):
-    conversations = (
-        Conversation.objects.filter(buyer=request.user)
-        .select_related("listing__goat", "listing__seller__seller_profile")
-        .annotate(
-            message_count=Count("messages"),
-            unread_count=Count(
-                "messages",
-                filter=Q(messages__is_read=False) & ~Q(messages__sender=request.user),
-            ),
-        )
+def inquiry_image(request, pk):
+    message = get_object_or_404(
+        Message.objects.select_related("conversation__listing"),
+        pk=pk,
     )
-    return render(request, "marketplace/my_inquiries.html", {"conversations": conversations})
+    conversation = message.conversation
+    if not (
+        request.user.is_staff
+        or request.user.is_superuser
+        or conversation.user_is_participant(request.user)
+    ):
+        raise PermissionDenied("You do not have access to this inquiry image.")
+    if not message.image_attachment:
+        raise Http404("This message has no image attachment.")
+
+    try:
+        image_file = message.image_attachment.open("rb")
+    except (FileNotFoundError, OSError):
+        logger.exception("Inquiry image %s is missing from storage", message.pk)
+        raise Http404("The inquiry image is unavailable.")
+
+    response = FileResponse(
+        image_file,
+        content_type=message.image_content_type or "application/octet-stream",
+        filename=message.image_original_name or os.path.basename(message.image_attachment.name),
+    )
+    response["Cache-Control"] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Content-Security-Policy"] = "default-src 'none'; sandbox"
+    return response
+
+
+@login_required
+def my_inquiries(request):
+    search_query = request.GET.get("q", "").strip()[:100]
+    conversations = _messaging_conversations(
+        request.user, search_query=search_query
+    )
+    return render(
+        request,
+        "marketplace/my_inquiries.html",
+        {"conversations": conversations, "search_query": search_query},
+    )
 
 
 @approved_seller_required
 def seller_messages(request):
-    conversations = (
-        Conversation.objects.filter(manageable_listing_q(request.user, "listing__"))
-        .select_related("listing__goat", "buyer")
-        .annotate(
-            message_count=Count("messages"),
-            unread_count=Count(
-                "messages",
-                filter=Q(messages__is_read=False) & ~Q(messages__sender=request.user),
-            ),
-        )
+    search_query = request.GET.get("q", "").strip()[:100]
+    conversations = _messaging_conversations(
+        request.user,
+        seller_view=True,
+        search_query=search_query,
     )
     return render(
         request,
         "marketplace/seller_messages.html",
-        {"conversations": conversations},
+        {"conversations": conversations, "search_query": search_query},
     )
 
 

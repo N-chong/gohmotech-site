@@ -1,4 +1,4 @@
-const CACHE_VERSION = "gohmotech-static-v1";
+const CACHE_VERSION = "gohmotech-static-v2";
 const OFFLINE_URL = "/static/pwa/offline.html";
 const APP_SHELL = [
   OFFLINE_URL,
@@ -29,7 +29,10 @@ self.addEventListener("fetch", event => {
   // Dynamic HTML and APIs are never cached. If navigation fails, return one
   // static page containing no user, session, transaction, or CSRF data.
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match(OFFLINE_URL)));
+    event.respondWith(
+      fetch(request, { cache: "no-store" })
+        .catch(() => caches.match(OFFLINE_URL))
+    );
     return;
   }
 

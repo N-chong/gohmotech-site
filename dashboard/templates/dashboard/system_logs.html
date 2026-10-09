@@ -1,0 +1,82 @@
+{% extends "base_modern.html" %}
+
+{% block title %}System Logs | GoHMoTech{% endblock %}
+{% block header_title %}System Logs{% endblock %}
+
+{% block extra_css %}
+.log-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.log-stat { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 1rem; }
+.log-stat strong { display: block; font-family: "Sora", sans-serif; font-size: 1.6rem; color: var(--text-primary); }
+.log-stat span { color: var(--text-secondary); font-size: .82rem; }
+.log-panel { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--radius-lg); overflow: hidden; }
+.log-filters { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(4, minmax(130px, 1fr)) auto; gap: .75rem; padding: 1rem; border-bottom: 1px solid var(--border-color); }
+.log-table { margin: 0; color: var(--text-primary); }
+.log-table th { white-space: nowrap; color: var(--text-secondary); font-size: .75rem; text-transform: uppercase; }
+.log-table td { vertical-align: top; }
+.log-message { min-width: 260px; max-width: 520px; }
+.log-context { color: var(--text-secondary); font-size: .76rem; overflow-wrap: anywhere; }
+.log-level { display: inline-block; border-radius: 999px; padding: .2rem .55rem; font-size: .72rem; font-weight: 700; text-transform: uppercase; }
+.log-level-info { color: #1d4ed8; background: #dbeafe; }
+.log-level-warning { color: #92400e; background: #fef3c7; }
+.log-level-error, .log-level-critical { color: #991b1b; background: #fee2e2; }
+.log-empty { padding: 3rem 1rem; text-align: center; color: var(--text-secondary); }
+@media (max-width: 900px) { .log-summary { grid-template-columns: repeat(2, 1fr); } .log-filters { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .log-summary, .log-filters { grid-template-columns: 1fr; } }
+{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+    <div>
+        <h1 class="h3 mb-1">System logs</h1>
+        <p class="text-secondary mb-0">Read-only authentication, security, failure, and administrative activity.</p>
+    </div>
+    <span class="badge text-bg-secondary">Administrator access only</span>
+</div>
+
+<section class="log-summary" aria-label="Log summary for the last 24 hours">
+    <div class="log-stat"><strong>{{ total_count }}</strong><span>All retained events</span></div>
+    <div class="log-stat"><strong>{{ recent_count }}</strong><span>Last 24 hours</span></div>
+    <div class="log-stat"><strong>{{ recent_warning_count }}</strong><span>Warnings · 24 hours</span></div>
+    <div class="log-stat"><strong>{{ recent_error_count }}</strong><span>Errors · 24 hours</span></div>
+</section>
+
+<section class="log-panel">
+    <form class="log-filters" method="get">
+        <div><label class="form-label small" for="log-search">Search</label><input class="form-control" id="log-search" name="q" value="{{ query }}" placeholder="Event, message, user, path, or IP"></div>
+        <div><label class="form-label small" for="log-level">Level</label><select class="form-select" id="log-level" name="level"><option value="">All levels</option>{% for value, label in levels %}<option value="{{ value }}" {% if selected_level == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+        <div><label class="form-label small" for="log-category">Category</label><select class="form-select" id="log-category" name="category"><option value="">All categories</option>{% for value, label in categories %}<option value="{{ value }}" {% if selected_category == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+        <div><label class="form-label small" for="log-from">From</label><input class="form-control" id="log-from" type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"></div>
+        <div><label class="form-label small" for="log-to">To</label><input class="form-control" id="log-to" type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"></div>
+        <div class="d-flex align-items-end gap-2"><button class="btn btn-primary" type="submit">Filter</button><a class="btn btn-outline-secondary" href="{% url 'dashboard:system_logs' %}" aria-label="Clear filters"><i class="bi bi-x-lg"></i></a></div>
+    </form>
+
+    {% if page.object_list %}
+    <div class="table-responsive">
+        <table class="table log-table">
+            <thead><tr><th>Time</th><th>Level</th><th>Category / event</th><th>Details</th><th>Actor</th><th>Request</th></tr></thead>
+            <tbody>
+            {% for log in page.object_list %}
+                <tr>
+                    <td class="text-nowrap"><time datetime="{{ log.created_at|date:'c' }}">{{ log.created_at|date:"M j, Y" }}<br><small>{{ log.created_at|date:"g:i:s A" }}</small></time></td>
+                    <td><span class="log-level log-level-{{ log.level }}">{{ log.get_level_display }}</span></td>
+                    <td><strong>{{ log.get_category_display }}</strong><div class="log-context">{{ log.event }}{% if log.source %} · {{ log.source }}{% endif %}</div></td>
+                    <td class="log-message">{{ log.message }}{% if log.metadata %}<details class="log-context mt-1"><summary>Metadata</summary><code>{{ log.metadata }}</code></details>{% endif %}</td>
+                    <td>{{ log.actor_label|default:"System" }}{% if log.ip_address %}<div class="log-context">{{ log.ip_address }}</div>{% endif %}</td>
+                    <td>{% if log.request_method %}<code>{{ log.request_method }}</code>{% endif %}{% if log.status_code %} <span class="badge text-bg-light">{{ log.status_code }}</span>{% endif %}{% if log.path %}<div class="log-context">{{ log.path }}</div>{% else %}<span class="text-secondary">—</span>{% endif %}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="log-empty"><i class="bi bi-search fs-2 d-block mb-2"></i>No system logs match these filters.</div>
+    {% endif %}
+
+    {% if page.paginator.num_pages > 1 %}
+    <nav class="d-flex justify-content-between align-items-center p-3 border-top" aria-label="System log pages">
+        <span class="text-secondary small">Page {{ page.number }} of {{ page.paginator.num_pages }} · {{ page.paginator.count }} results</span>
+        <div class="btn-group">{% if page.has_previous %}<a class="btn btn-outline-secondary" href="?{% if query_string %}{{ query_string }}&amp;{% endif %}page={{ page.previous_page_number }}">Previous</a>{% endif %}{% if page.has_next %}<a class="btn btn-outline-secondary" href="?{% if query_string %}{{ query_string }}&amp;{% endif %}page={{ page.next_page_number }}">Next</a>{% endif %}</div>
+    </nav>
+    {% endif %}
+</section>
+{% endblock %}

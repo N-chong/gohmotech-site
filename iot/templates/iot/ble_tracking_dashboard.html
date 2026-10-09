@@ -718,6 +718,7 @@
             const exact = document.createElement('span');
             exact.className = 'cell-subtext';
             exact.textContent = new Date(row.last_seen).toLocaleTimeString([], {
+                timeZone: 'Asia/Manila',
                 hour: '2-digit', minute: '2-digit', second: '2-digit'
             });
             td.appendChild(exact);

@@ -54,6 +54,8 @@ rollback() {
         systemctl enable --now gohmotech-beta
         echo "Production cutover failed; beta service restored from $backup_dir" >&2
     fi
+    trap - ERR
+    exit 1
 }
 trap rollback ERR
 
@@ -77,6 +79,7 @@ done
 
 runuser -u gohmotech -- "$python_bin" manage.py check --deploy --settings=config.production
 runuser -u gohmotech -- "$python_bin" manage.py showmigrations --plan --settings=config.production >/dev/null
+runuser -u gohmotech -- "$python_bin" manage.py migrate --noinput --settings=config.production
 runuser -u gohmotech -- "$python_bin" manage.py collectstatic --noinput --settings=config.production
 
 install -d -m 755 /var/www/gohmotech-production/static

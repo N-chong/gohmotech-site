@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 
 from django.contrib import messages
-from django.db.models import Q
+from django.db.models import Q, F, Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -12,9 +12,13 @@ from marketplace.decorators import farm_access_required, farm_owner_required
 from feeding.models import FeedLevel, FeedLog, FeedSchedule
 from iot.goat_models import GoatBehaviorLog, GoatDetectionHistory, GoatImage, IPCamera, MissingGoatAlert
 from iot.goat_models import Goat
-from iot.models import ActuationLog, ActuatorState, AutomationRule, SensorReading
+from iot.models import (
+    ActuationLog, ActuatorState, AutomationRule, SensorReading,
+    SensorReadingSummary,
+)
 from iot.weather_service import get_farm_weather
 from iot.status_utils import is_device_online
+from iot.sensor_storage import period_for
 
 
 def _get_owned_goats(user):
@@ -422,7 +426,37 @@ def owner_dashboard(request):
 
     avg_temp = None
     avg_humidity = None
-    if report_sensors.exists():
+    summary_sensors = SensorReadingSummary.objects.filter(
+        period_start__gte=report_start, period_start__lt=report_end)
+    current_period_start, _ = period_for(timezone.now())
+    historical_sensor_backlog = report_sensors.filter(
+        timestamp__lt=current_period_start,
+        aggregation_completed_at__isnull=True,
+    ).exists()
+    use_sensor_summaries = (
+        report_end - report_start >= timedelta(days=7)
+        and summary_sensors.exists()
+        and not historical_sensor_backlog
+    )
+    summary_sample_count = 0
+    if use_sensor_summaries:
+        summary_sample_count = summary_sensors.aggregate(
+            value=Sum('sample_count'))['value'] or 0
+        for sensor_type, target in (
+                ('temperature', 'temperature'), ('humidity', 'humidity')):
+            values = summary_sensors.filter(sensor_type=sensor_type).aggregate(
+                weighted=Sum(F('average_value') * F('sample_count')),
+                samples=Sum('sample_count'),
+            )
+            average = (
+                values['weighted'] / values['samples']
+                if values['samples'] else None
+            )
+            if target == 'temperature':
+                avg_temp = round(average, 1) if average is not None else None
+            else:
+                avg_humidity = round(average, 1) if average is not None else None
+    elif report_sensors.exists():
         valid_temps = [s.temperature for s in report_sensors if s.temperature is not None]
         valid_humidities = [s.humidity for s in report_sensors if s.humidity is not None]
         if valid_temps:
@@ -433,7 +467,8 @@ def owner_dashboard(request):
     environmental_report = {
         "avg_temperature": avg_temp,
         "avg_humidity": avg_humidity,
-        "samples": report_sensors.count(),
+        "samples": summary_sample_count if use_sensor_summaries else report_sensors.count(),
+        "uses_summaries": use_sensor_summaries,
     }
 
     trend_points = _build_trend_points()

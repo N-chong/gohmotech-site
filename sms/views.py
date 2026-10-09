@@ -16,7 +16,11 @@ authenticated marketplace user manage only their own SMS registration.
 from django.conf import settings as django_settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
+from django.http import HttpResponseNotAllowed
 from django.shortcuts import redirect, render
+from django.utils import timezone
+from datetime import datetime, timedelta
 
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, viewsets
@@ -24,23 +28,25 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from marketplace.auth import is_marketplace_user
+from marketplace.auth import can_manage_farm, is_admin, is_marketplace_user
+from marketplace.decorators import staff_required
 
 from .forms import SmsRegistrationForm
-from .models import SmsLog, SmsRegistration, SmsReminder, SmsSettings
+from .models import (DailySummaryRun, SmsLog, SmsRegistration, SmsReminder,
+                     SmsSettings)
 from .providers import get_client
 from .serializers import (SmsLogSerializer, SmsReminderSerializer,
                           SmsSettingsSerializer)
 
 
 class IsStaffOrReadOnly(IsAuthenticated):
-    """SMS operational data and provider actions are staff-only."""
+    """SMS operations are limited to farm owners and administrators."""
 
     def has_permission(self, request, view):
         base = super().has_permission(request, view)
         if not base:
             return False
-        return bool(request.user and request.user.is_staff)
+        return can_manage_farm(request.user)
 
 
 class SmsReminderViewSet(viewsets.ModelViewSet):
@@ -140,6 +146,50 @@ def sms_balance_api(request):
     })
 
 
+@api_view(['GET'])
+@permission_classes([IsStaffOrReadOnly])
+def sms_diagnostics_api(request):
+    """Non-secret operational status for the SMS settings screen."""
+    config = SmsSettings.get_config()
+    now = timezone.localtime(timezone.now())
+    scheduled_today = timezone.make_aware(
+        datetime.combine(now.date(), config.daily_time),
+        timezone.get_current_timezone(),
+    )
+    today_run = DailySummaryRun.objects.filter(
+        scheduled_date=now.date()).first()
+    next_run = scheduled_today
+    # A run is unique per local date even if the operator changes the clock
+    # afterward; once today's run exists, the next eligible run is tomorrow.
+    if today_run is not None:
+        next_run = scheduled_today + timedelta(days=1)
+
+    last_run = DailySummaryRun.objects.select_related('sms_log').first()
+    backend = getattr(django_settings, 'SMS_BACKEND', 'console')
+    key_configured = bool(getattr(django_settings, 'SEMAPHORE_API_KEY', ''))
+    service_available = backend == 'console' or key_configured
+    return Response({
+        'timezone': django_settings.TIME_ZONE,
+        'sms_service': 'Available' if service_available else 'Error',
+        'sms_service_detail': (
+            'Console test backend' if backend == 'console'
+            else ('Semaphore configured' if key_configured
+                  else 'Semaphore API key is missing')
+        ),
+        'sms_enabled': config.enabled,
+        'daily_enabled': config.daily_enabled,
+        'scheduled_time': config.daily_time.strftime('%H:%M'),
+        'last_run': ({
+            'scheduled_for': last_run.scheduled_for,
+            'executed_at': last_run.executed_at,
+            'status': last_run.get_status_display(),
+            'error': last_run.error_message,
+            'sms_log_id': last_run.sms_log_id,
+        } if last_run else None),
+        'next_scheduled_run': next_run if config.daily_enabled else None,
+    })
+
+
 # ---------------------------------------------------------------------------
 # Page view (server-rendered)
 # ---------------------------------------------------------------------------
@@ -148,6 +198,7 @@ def sms_balance_api(request):
 def sms_dashboard(request):
     """The tabbed SMS page: Settings / Reminders / Logs."""
     config = SmsSettings.get_config()
+    can_manage_alert_recipients = is_admin(request.user)
     context = {
         'active_page': 'sms',
         'config': config,
@@ -161,8 +212,48 @@ def sms_dashboard(request):
         'days_of_week': SmsReminder.DAYS_OF_WEEK,
         'sms_type_choices': SmsLog.SMS_TYPE_CHOICES,
         'status_choices': SmsLog.STATUS_CHOICES,
+        'can_manage_sms': can_manage_farm(request.user),
+        'can_manage_alert_recipients': can_manage_alert_recipients,
+        'alert_recipient_registrations': (
+            SmsRegistration.objects.select_related('user')
+            .order_by('user__first_name', 'user__last_name', 'user__username')
+            if can_manage_alert_recipients else []
+        ),
     }
     return render(request, 'sms/sms_dashboard.html', context)
+
+
+@staff_required
+def manage_alert_recipients(request):
+    """Replace the administrator-managed set of farm-alert SMS recipients."""
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+
+    selected_ids = [
+        value for value in request.POST.getlist('recipient_ids')
+        if value.isdigit()
+    ]
+    with transaction.atomic():
+        SmsRegistration.objects.update(receives_farm_alerts=False)
+        selected_count = SmsRegistration.objects.filter(
+            pk__in=selected_ids,
+            is_active=True,
+            user__is_active=True,
+        ).update(receives_farm_alerts=True)
+
+    if selected_count:
+        messages.success(
+            request,
+            f"Farm alert recipients updated: {selected_count} number"
+            f"{'s' if selected_count != 1 else ''} selected.",
+        )
+    else:
+        messages.info(
+            request,
+            "No registered recipients selected. Farm alerts will use the "
+            "fallback number in General settings.",
+        )
+    return redirect('sms:dashboard')
 
 
 @login_required

@@ -7,6 +7,8 @@ from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator, MinValueValidator, RegexValidator
 from django.core.files.storage import FileSystemStorage
 from django.db import models
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 from django.utils import timezone
 from django.utils.deconstruct import deconstructible
 
@@ -26,6 +28,11 @@ def validate_support_attachment_size(upload):
         raise ValidationError("Support attachments must be 8 MB or smaller.")
 
 
+def validate_inquiry_image_size(upload):
+    if upload.size > 5 * 1024 * 1024:
+        raise ValidationError("Image is too large. Please select a smaller image.")
+
+
 @deconstructible
 class PrivateSupportStorage(FileSystemStorage):
     def __init__(self):
@@ -38,10 +45,31 @@ class PrivateSupportStorage(FileSystemStorage):
 support_attachment_storage = PrivateSupportStorage()
 
 
+@deconstructible
+class PrivateInquiryStorage(FileSystemStorage):
+    def __init__(self):
+        super().__init__(
+            location=settings.PRIVATE_INQUIRY_ROOT,
+            base_url=None,
+        )
+
+
+inquiry_image_storage = PrivateInquiryStorage()
+
+
 def support_attachment_path(instance, filename):
     extension = os.path.splitext(filename)[1].lower()
     ticket_id = instance.message.ticket_id or "pending"
     return f"ticket-{ticket_id}/{uuid.uuid4().hex}{extension}"
+
+
+def inquiry_image_path(instance, filename):
+    extension = os.path.splitext(filename)[1].lower()
+    conversation_id = instance.conversation_id or "pending"
+    return (
+        f"conversation-{conversation_id}/{timezone.now():%Y/%m}/"
+        f"{uuid.uuid4().hex}{extension}"
+    )
 
 
 class SellerProfile(models.Model):
@@ -300,7 +328,19 @@ class Message(models.Model):
         on_delete=models.PROTECT,
         related_name="marketplace_messages",
     )
-    body = models.TextField(max_length=2000)
+    body = models.TextField(max_length=2000, blank=True)
+    image_attachment = models.ImageField(
+        storage=inquiry_image_storage,
+        upload_to=inquiry_image_path,
+        validators=[
+            FileExtensionValidator(["jpg", "jpeg", "png", "webp"]),
+            validate_inquiry_image_size,
+        ],
+        blank=True,
+    )
+    image_original_name = models.CharField(max_length=255, blank=True)
+    image_content_type = models.CharField(max_length=100, blank=True)
+    image_size = models.PositiveIntegerField(null=True, blank=True)
     is_read = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
 
@@ -318,8 +358,8 @@ class Message(models.Model):
 
     def clean(self):
         super().clean()
-        if not self.body or not self.body.strip():
-            raise ValidationError({"body": "Enter a message."})
+        if not (self.body and self.body.strip()) and not self.image_attachment:
+            raise ValidationError({"body": "Enter a message or attach an image."})
         if self.conversation_id and self.sender_id:
             if not self.conversation.user_is_participant(self.sender):
                 raise ValidationError(
@@ -327,6 +367,13 @@ class Message(models.Model):
                 )
             if self.conversation.status != Conversation.OPEN:
                 raise ValidationError({"conversation": "This conversation is closed."})
+
+
+@receiver(post_delete, sender=Message)
+def delete_message_image(sender, instance, **kwargs):
+    """Remove a private image after its sole owning message is deleted."""
+    if instance.image_attachment:
+        instance.image_attachment.delete(save=False)
 
 
 class Reservation(models.Model):

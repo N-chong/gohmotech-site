@@ -50,10 +50,24 @@ app.conf.beat_schedule = {
         'schedule': 60.0,  # Every 60 seconds
     },
     
-    # Aggregate sensor data every 5 minutes
+    # Finalize completed Manila-aligned 30-minute sensor periods. Running every
+    # five minutes also picks up late arrivals without delaying live alerts.
     'aggregate-sensor-data': {
         'task': 'iot.tasks.aggregate_sensor_data',
         'schedule': 300.0,  # Every 5 minutes
+    },
+
+    # Guarded raw cleanup. The task remains a no-op until an administrator
+    # enables cleanup after verifying historical summaries.
+    'cleanup-old-sensor-data': {
+        'task': 'iot.tasks.cleanup_old_sensor_data',
+        'schedule': crontab(hour=2, minute=30),
+    },
+
+    # Evaluate configured environmental thresholds and 30-second sensor health.
+    'check-monitoring-alerts': {
+        'task': 'iot.tasks.check_monitoring_alerts',
+        'schedule': 60.0,
     },
     
     # Cleanup old detections daily at 2 AM

@@ -1,0 +1,9 @@
+{% load static %}
+{% if request.path|slice:':10' != '/accounts/' and request.resolver_match.url_name != 'complete_profile' %}
+{% if is_farm_owner or is_approved_seller and system_role == 'marketplace' %}
+<link rel="stylesheet" href="{% static 'css/onboarding.css' %}?v=mascots-1">
+<div id="onboarding-config" data-endpoint="{% url 'dashboard:tutorial_state' %}" hidden>{% csrf_token %}</div>
+{% include "onboarding/mascot_assets.html" %}
+<script src="{% static 'js/onboarding.js' %}?v=mascots-1" defer></script>
+{% endif %}
+{% endif %}

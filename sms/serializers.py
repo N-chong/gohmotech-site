@@ -36,6 +36,25 @@ class SmsSettingsSerializer(serializers.ModelSerializer):
         from security.models import Notification
         return [{'value': v, 'label': l} for v, l in Notification.SEVERITY_CHOICES]
 
+    def validate_recipient_number(self, value):
+        from .providers import normalize_ph_number
+        if not value:
+            return ''
+        try:
+            return normalize_ph_number(value)
+        except ValueError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
+
+    def validate(self, attrs):
+        enabled = attrs.get('enabled', getattr(self.instance, 'enabled', False))
+        recipient = attrs.get(
+            'recipient_number', getattr(self.instance, 'recipient_number', ''))
+        if enabled and not recipient:
+            raise serializers.ValidationError({
+                'recipient_number': 'A recipient is required when SMS is enabled.'
+            })
+        return attrs
+
 
 class SmsReminderSerializer(serializers.ModelSerializer):
     reminder_type_display = serializers.CharField(

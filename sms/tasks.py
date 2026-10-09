@@ -21,9 +21,11 @@ UI is honoured by the worker on its next tick.
 """
 
 import logging
+from datetime import datetime
 
 from celery import shared_task
 from django.core.cache import cache
+from django.db import IntegrityError
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -33,37 +35,97 @@ logger = logging.getLogger(__name__)
 ALERT_MAX_CHARS = 300
 
 
+def _format_reminder_text(reminder):
+    """Build a reminder SMS with the schedule context and user message."""
+    scheduled_time = reminder.schedule_time.strftime('%I:%M %p')
+    return (
+        f"Title: {reminder.title}\n"
+        f"Type: {reminder.get_reminder_type_display()}\n"
+        f"Time: {scheduled_time}\n"
+        f"Message: {reminder.message}"
+    )
+
+
 @shared_task
 def send_daily_summary():
-    """Send the daily summary SMS if it is due this minute.
+    """Execute today's summary once at or after its Manila scheduled time.
 
-    Runs every minute via Celery Beat. Sends only when SMS + daily summary are
-    enabled and the current local HH:MM equals the configured ``daily_time``.
-    Deduplicated so a restart or overlapping tick cannot double-send: at most one
-    'daily' log per calendar day.
+    Missed-run policy: if the Pi is down at the exact minute, the first tick
+    later on the same local calendar day performs one catch-up attempt. Runs
+    from earlier dates are never replayed. A unique ``DailySummaryRun`` plus an
+    atomic pending->processing claim prevents duplicate sends across workers or
+    restarts. Processing runs are not auto-retried because a provider timeout
+    can be ambiguous and retrying could send a duplicate message.
     """
-    from .models import SmsLog, SmsSettings
+    from .models import DailySummaryRun, SmsSettings
     from .services import send_sms
     from .summaries import build_daily_summary_text
 
     settings_obj = SmsSettings.get_config()
-    if not (settings_obj.enabled and settings_obj.daily_enabled):
+    if not settings_obj.daily_enabled:
         return "Daily summary disabled"
 
     now = timezone.localtime(timezone.now())
-    target = settings_obj.daily_time
-    if not (now.hour == target.hour and now.minute == target.minute):
-        return "Not the scheduled minute"
+    scheduled_for = timezone.make_aware(
+        datetime.combine(now.date(), settings_obj.daily_time),
+        timezone.get_current_timezone(),
+    )
+    if now < scheduled_for:
+        return "Not due"
 
-    # One per day, regardless of how many times this minute is polled. Compared
-    # against local midnight with a plain datetime lookup (not __date) so it does
-    # not depend on MySQL timezone tables, which are not loaded on this install.
-    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    if SmsLog.objects.filter(sms_type='daily', created_at__gte=day_start).exists():
-        return "Daily summary already sent today"
+    try:
+        run, _created = DailySummaryRun.objects.get_or_create(
+            scheduled_date=now.date(),
+            defaults={
+                'scheduled_for': scheduled_for,
+                'recipient': settings_obj.recipient_number,
+            },
+        )
+    except IntegrityError:
+        run = DailySummaryRun.objects.get(scheduled_date=now.date())
 
-    log = send_sms(message=build_daily_summary_text(), sms_type='daily')
-    return f"Daily summary: {log.status if log else 'skipped'}"
+    # One atomic claimant. Existing terminal/processing rows are never replayed.
+    claimed = DailySummaryRun.objects.filter(
+        pk=run.pk, status='pending').update(
+            status='processing', executed_at=timezone.now(),
+            recipient=settings_obj.recipient_number, error_message='')
+    if not claimed:
+        return f"Daily summary already {run.status}"
+
+    logger.info("[DAILY SUMMARY] Job started scheduled=%s actual=%s",
+                scheduled_for.isoformat(), now.isoformat())
+
+    if not settings_obj.enabled:
+        DailySummaryRun.objects.filter(pk=run.pk).update(
+            status='skipped', error_message='SMS master switch is disabled')
+        logger.warning("[DAILY SUMMARY] Skipped: SMS master switch is disabled")
+        return "Daily summary skipped: SMS disabled"
+
+    try:
+        message = build_daily_summary_text()
+        logger.info("[DAILY SUMMARY] Summary generated")
+        log = send_sms(message=message, sms_type='daily')
+        if log is None:
+            DailySummaryRun.objects.filter(pk=run.pk).update(
+                status='skipped', error_message='SMS was disabled before sending')
+            return "Daily summary skipped"
+        DailySummaryRun.objects.filter(pk=run.pk).update(
+            status=log.status if log.status in ('sent', 'failed') else 'failed',
+            sms_log=log,
+            error_message=log.error_message,
+        )
+        if log.status == 'sent':
+            logger.info("[DAILY SUMMARY] SMS sent log=%s", log.pk)
+        else:
+            logger.warning("[DAILY SUMMARY] SMS failed log=%s reason=%s",
+                           log.pk, (log.error_message or 'unknown')[:500])
+        return f"Daily summary: {log.status}"
+    except Exception as exc:
+        safe_error = f"{exc.__class__.__name__}: {exc}"[:500]
+        DailySummaryRun.objects.filter(pk=run.pk).update(
+            status='failed', error_message=safe_error)
+        logger.exception("[DAILY SUMMARY] Job failed")
+        return "Daily summary: failed"
 
 
 @shared_task
@@ -104,7 +166,10 @@ def send_due_reminders():
             continue
 
         log = send_sms(
-            message=reminder.message, sms_type='reminder', reminder=reminder)
+            message=_format_reminder_text(reminder),
+            sms_type='reminder',
+            reminder=reminder,
+        )
         if log is not None:
             sent_count += 1
 
@@ -133,7 +198,7 @@ def send_alert_sms(notification_id):
     changed since the notification was raised) and applies a per-type cooldown
     via the shared DB cache so a burst of the same alert type does not spam SMS.
     """
-    from .models import SmsSettings
+    from .models import SmsRegistration, SmsSettings
     from .services import send_sms
     from security.models import Notification
 
@@ -150,23 +215,59 @@ def send_alert_sms(notification_id):
 
     # Per-type cooldown, shared across processes via the DB cache.
     cooldown = settings_obj.alert_cooldown_minutes or 0
-    cache_key = f"sms_alert_cooldown:{notification.notification_type}"
+    # Scope cooldown to the alert type + source. An environmental sensor burst
+    # should not suppress an unrelated security alert or another device.
+    source_key = (notification.source or 'global').strip().lower()
+    cache_key = f"sms_alert_cooldown:{notification.notification_type}:{source_key}"
     if cooldown and cache.get(cache_key):
         logger.info("send_alert_sms: cooldown active for %s",
                     notification.notification_type)
         return "Cooldown active"
 
-    log = send_sms(
-        message=_format_alert_text(notification),
-        sms_type='alert',
-        notification=notification,
+    # Administrators may select multiple registered numbers for farm alerts.
+    # Keep the original global number as a safe fallback until at least one
+    # active managed recipient has been selected.
+    recipients = list(
+        SmsRegistration.objects.filter(
+            receives_farm_alerts=True,
+            is_active=True,
+            user__is_active=True,
+        ).values_list('phone_number', flat=True)
     )
+    recipients = list(dict.fromkeys(number for number in recipients if number))
 
-    # Only start the cooldown once a message was actually attempted+sent.
-    if cooldown and log is not None and log.status == 'sent':
+    message = _format_alert_text(notification)
+    if recipients:
+        logs = [
+            send_sms(
+                message=message,
+                sms_type='alert',
+                number=number,
+                notification=notification,
+            )
+            for number in recipients
+        ]
+    else:
+        logs = [send_sms(
+            message=message,
+            sms_type='alert',
+            notification=notification,
+        )]
+
+    # Only start the cooldown once at least one message was actually sent.
+    sent_count = sum(
+        1 for log in logs if log is not None and log.status == 'sent'
+    )
+    failed_count = sum(
+        1 for log in logs if log is not None and log.status == 'failed'
+    )
+    if cooldown and sent_count:
         cache.set(cache_key, True, timeout=cooldown * 60)
 
-    return f"Alert SMS: {log.status if log else 'skipped'}"
+    if len(logs) == 1:
+        log = logs[0]
+        return f"Alert SMS: {log.status if log else 'skipped'}"
+    return f"Alert SMS: {sent_count} sent, {failed_count} failed"
 
 
 @shared_task

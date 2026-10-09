@@ -21,6 +21,7 @@ class MLModel(models.Model):
     """
     MODEL_TYPES = [
         ('yolov8', 'YOLOv8 (Ultralytics)'),
+        ('rfdetr', 'RF-DETR (auto-detect checkpoint)'),
         ('roboflow', 'Roboflow Inference (Self-hosted)'),
         ('roboflow-hosted', 'Roboflow Hosted API'),
         ('yolo', 'YOLO (TensorFlow/Keras)'),

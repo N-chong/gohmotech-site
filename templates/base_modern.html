@@ -136,17 +136,20 @@
         
         {% block extra_css %}{% endblock %}
     </style>
+    <link rel="stylesheet" href="{% static 'css/farm-theme.css' %}">
     {% block extra_head %}{% endblock %}
 </head>
-<body class="{% if not user.is_authenticated %}no-sidebar{% endif %}">
+<body class="{% if user.is_authenticated %}farm-shell{% else %}no-sidebar{% endif %}"
+      data-section="{{ request.resolver_match.namespace|default:'dashboard' }}"
+      data-page="{{ request.resolver_match.url_name|default:'home' }}">
     <!-- Sidebar Navigation -->
     {% if user.is_authenticated %}
-    <div class="sidebar">
+    <div class="sidebar" id="app-sidebar">
         <a href="/" class="sidebar-brand">
             <img src="{% static 'images/gohmotech-logo.png' %}" alt="GoHMoTech Logo" style="height: 50px;">
             <div class="sidebar-brand-text">
                 <h5 style="color: #f8fafc;">GoHMoTech</h5>
-                <small>Smart Goat House</small>
+                <small>Smart Farm System</small>
             </div>
         </a>
         
@@ -166,18 +169,19 @@
             <li class="sidebar-nav-title">Navigation</li>
             <li class="sidebar-nav-item">
                 <a href="{% if is_system_admin %}/iot/{% else %}/iot/owner/{% endif %}" class="sidebar-nav-link">
-                    <i class="bi bi-grid-fill"></i> <span>Dashboard</span>
+                    <i class="bi bi-grid-fill"></i> <span>Overview</span>
                 </a>
             </li>
+            {% if is_system_admin %}
             <li class="sidebar-nav-item">
                 <a href="/iot/monitoring/" class="sidebar-nav-link">
-                    <i class="bi bi-camera-video"></i> <span>Monitoring</span>
+                    <i class="bi bi-camera-video"></i> <span>Monitor</span>
                 </a>
             </li>
             {% if can_manage_farm %}
             <li class="sidebar-nav-item">
                 <a href="/iot/automation/" class="sidebar-nav-link">
-                    <i class="bi bi-robot"></i> <span>Automation</span>
+                    <i class="bi bi-robot"></i> <span>Operate</span>
                 </a>
             </li>
             <li class="sidebar-nav-item">
@@ -192,7 +196,7 @@
             </li>
             {% endif %}
 
-            <li class="sidebar-nav-title">Livestock</li>
+            <li class="sidebar-nav-title">Herd</li>
             <li class="sidebar-nav-item">
                 <a href="/iot/inventory/" class="sidebar-nav-link">
                     <i class="bi bi-grid-3x3-gap-fill"></i> <span>Goat Inventory</span>
@@ -279,12 +283,67 @@
                     <i class="bi bi-chat-dots-fill"></i> <span>SMS Notifications</span>
                 </a>
             </li>
+            <li class="sidebar-nav-item">
+                <a href="{% url 'dashboard:system_logs' %}" class="sidebar-nav-link">
+                    <i class="bi bi-card-list"></i> <span>System Logs</span>
+                </a>
+            </li>
             {% endif %}
             {% if is_system_admin %}
             <li class="sidebar-nav-item">
                 <a href="/admin/" class="sidebar-nav-link">
                     <i class="bi bi-gear-fill"></i> <span>Settings</span>
                 </a>
+            </li>
+            {% endif %}
+            {% else %}
+            <li class="sidebar-nav-item nav-group-item">
+                <details class="sidebar-nav-group" data-nav-prefix="/iot/inventory/,/feeding/,/iot/automation/,/marketplace/">
+                    <summary class="sidebar-nav-link"><i class="bi bi-house-heart-fill"></i><span>Farm</span><i class="bi bi-chevron-down nav-chevron"></i></summary>
+                    <div class="sidebar-subnav">
+                        <a href="{% url 'iot:goat_inventory' %}" class="sidebar-nav-link"><i class="bi bi-grid-3x3-gap-fill"></i><span>Manage Goats</span></a>
+                        {% if can_manage_farm %}<a href="{% url 'feeding:dashboard' %}" class="sidebar-nav-link"><i class="bi bi-bucket-fill"></i><span>Feeding</span></a>
+                        <a href="{% url 'iot:automation_control' %}" class="sidebar-nav-link"><i class="bi bi-sliders"></i><span>Farm Controls</span></a>{% endif %}
+                        <a href="/marketplace/" class="sidebar-nav-link"><i class="bi bi-shop"></i><span>Marketplace</span></a>
+                        {% if is_farm_owner %}<a href="{% url 'marketplace:seller_dashboard' %}" class="sidebar-nav-link"><i class="bi bi-bag-check-fill"></i><span>My Listings</span></a>{% endif %}
+                    </div>
+                </details>
+            </li>
+            <li class="sidebar-nav-item nav-group-item">
+                <details class="sidebar-nav-group" data-nav-prefix="/iot/monitoring/,/iot/cameras/,/ml/detection/,/iot/tracking/,/security/">
+                    <summary class="sidebar-nav-link"><i class="bi bi-eye-fill"></i><span>Monitoring</span><i class="bi bi-chevron-down nav-chevron"></i></summary>
+                    <div class="sidebar-subnav">
+                        <a href="{% url 'iot:monitoring_dashboard' %}" class="sidebar-nav-link"><i class="bi bi-camera-video"></i><span>Farm Monitoring</span></a>
+                        <a href="{% url 'ml_models:detection_feed' %}" class="sidebar-nav-link"><i class="bi bi-bounding-box-circles"></i><span>Live Detection</span></a>
+                        <a href="{% url 'iot:ble_tracking_dashboard' %}" class="sidebar-nav-link"><i class="bi bi-broadcast-pin"></i><span>Goat Tracking</span></a>
+                        {% if can_manage_farm %}<a href="{% url 'security:dashboard' %}" class="sidebar-nav-link"><i class="bi bi-shield-check"></i><span>Security &amp; Alerts</span></a>{% endif %}
+                    </div>
+                </details>
+            </li>
+            {% if can_manage_farm %}
+            <li class="sidebar-nav-item nav-group-item">
+                <details class="sidebar-nav-group" data-nav-prefix="/analytics/,/iot/detections/,/iot/alerts/">
+                    <summary class="sidebar-nav-link"><i class="bi bi-journal-text"></i><span>Records</span><i class="bi bi-chevron-down nav-chevron"></i></summary>
+                    <div class="sidebar-subnav">
+                        <a href="{% url 'analytics:dashboard' %}" class="sidebar-nav-link"><i class="bi bi-file-earmark-bar-graph-fill"></i><span>Reports</span></a>
+                        <a href="{% url 'iot:detection_history' %}" class="sidebar-nav-link"><i class="bi bi-clock-history"></i><span>Detection History</span></a>
+                    </div>
+                </details>
+            </li>
+            {% endif %}
+            <li class="sidebar-nav-item">
+                <a href="{% url 'iot:devices_list' %}" class="sidebar-nav-link"><i class="bi bi-router-fill"></i><span>Device Status</span></a>
+            </li>
+            <li class="sidebar-nav-item nav-group-item">
+                <details class="sidebar-nav-group" data-nav-prefix="/support/,/sms/,/marketplace/inquiries/">
+                    <summary class="sidebar-nav-link"><i class="bi bi-question-circle-fill"></i><span>Help &amp; Settings</span><i class="bi bi-chevron-down nav-chevron"></i></summary>
+                    <div class="sidebar-subnav">
+                        {% include "onboarding/replay.html" %}
+                        <a href="{% url 'marketplace:support_center' %}" class="sidebar-nav-link"><i class="bi bi-headset"></i><span>Customer Service</span></a>
+                        <a href="{% url 'sms:registration' %}" class="sidebar-nav-link"><i class="bi bi-phone-fill"></i><span>SMS Alerts</span></a>
+                        <a href="/marketplace/inquiries/" class="sidebar-nav-link"><i class="bi bi-chat-left-text-fill"></i><span>Inquiries</span></a>
+                    </div>
+                </details>
             </li>
             {% endif %}
             <li class="sidebar-nav-item">
@@ -298,6 +357,27 @@
             {% endif %}
         </ul>
     </div>
+    <button class="sidebar-backdrop" type="button" aria-label="Close navigation"></button>
+
+    {% if not is_marketplace_buyer %}
+    <nav class="mobile-bottom-nav" aria-label="Primary mobile navigation">
+        <a href="{% if is_system_admin %}{% url 'iot:dashboard' %}{% else %}{% url 'iot:owner_dashboard' %}{% endif %}" data-mobile-path="/iot/owner/,/iot/">
+            <i class="bi bi-grid-fill"></i><span>Overview</span>
+        </a>
+        <a href="{% url 'iot:monitoring_dashboard' %}" data-mobile-path="/iot/monitoring/,/iot/cameras/,/ml/detection/">
+            <i class="bi bi-camera-video-fill"></i><span>Monitor</span>
+        </a>
+        <a href="{% url 'iot:goat_inventory' %}" data-mobile-path="/iot/inventory/,/iot/tracking/">
+            <i class="bi bi-heart-pulse-fill"></i><span>Herd</span>
+        </a>
+        <a href="{% if can_manage_farm %}{% url 'iot:automation_control' %}{% else %}{% url 'iot:devices_list' %}{% endif %}" data-mobile-path="/iot/automation/,/iot/devices/,/feeding/">
+            <i class="bi bi-toggles2"></i><span>Operate</span>
+        </a>
+        <button class="mobile-more-toggle" type="button" aria-label="Open all navigation" aria-expanded="false" aria-controls="app-sidebar">
+            <i class="bi bi-grid-3x3-gap-fill"></i><span>More</span>
+        </button>
+    </nav>
+    {% endif %}
     {% endif %}
     
     <!-- Main Content Area -->
@@ -305,7 +385,8 @@
         <!-- Top Header -->
         {% if user.is_authenticated %}
         <div class="top-header">
-            <div class="d-flex align-items-center gap-3">
+            <div class="d-flex align-items-center gap-3 min-w-0">
+                <button class="mobile-menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="app-sidebar"><i class="bi bi-list"></i></button>
                 <span class="header-title">{% block header_title %}Dashboard{% endblock %}</span>
                 <div class="header-date">
                     <i class="bi bi-calendar3"></i>
@@ -363,7 +444,7 @@
         // Update current date
         function updateDate() {
             const now = new Date();
-            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Manila' };
             const dateElement = document.getElementById('current-date');
             if (dateElement) {
                 dateElement.textContent = now.toLocaleDateString('en-US', options);
@@ -373,7 +454,7 @@
         
         // Highlight active nav link
         const currentPath = window.location.pathname;
-        const navLinks = document.querySelectorAll('.sidebar-nav-link');
+        const navLinks = document.querySelectorAll('a.sidebar-nav-link');
         
         // Find the best matching link (most specific match)
         let bestMatch = null;
@@ -397,7 +478,41 @@
         // Apply active class to best match
         if (bestMatch) {
             bestMatch.classList.add('active');
+            const activeGroup = bestMatch.closest('details');
+            if (activeGroup) activeGroup.open = true;
         }
+
+        // On phones the grouped navigation opens as a familiar drawer. Keep
+        // focus/ARIA state predictable and close it after choosing a page.
+        const sidebar = document.querySelector('.sidebar');
+        const menuToggle = document.querySelector('.mobile-menu-toggle');
+        const moreToggle = document.querySelector('.mobile-more-toggle');
+        const menuBackdrop = document.querySelector('.sidebar-backdrop');
+        function setMenu(open) {
+            document.body.classList.toggle('nav-open', open);
+            if (menuToggle) menuToggle.setAttribute('aria-expanded', String(open));
+            if (moreToggle) moreToggle.setAttribute('aria-expanded', String(open));
+        }
+        if (menuToggle) menuToggle.addEventListener('click', () => setMenu(!document.body.classList.contains('nav-open')));
+        if (moreToggle) moreToggle.addEventListener('click', () => setMenu(!document.body.classList.contains('nav-open')));
+        if (menuBackdrop) menuBackdrop.addEventListener('click', () => setMenu(false));
+        if (sidebar) sidebar.querySelectorAll('a').forEach(link => link.addEventListener('click', () => setMenu(false)));
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && document.body.classList.contains('nav-open')) setMenu(false);
+        });
+
+        let mobileBestMatch = null;
+        let mobileBestLength = 0;
+        document.querySelectorAll('.mobile-bottom-nav [data-mobile-path]').forEach(link => {
+            const prefixes = (link.dataset.mobilePath || '').split(',').filter(Boolean);
+            prefixes.forEach(prefix => {
+                if (currentPath.startsWith(prefix) && prefix.length > mobileBestLength) {
+                    mobileBestMatch = link;
+                    mobileBestLength = prefix.length;
+                }
+            });
+        });
+        if (mobileBestMatch) mobileBestMatch.classList.add('active');
 
         // Dark/Light Mode Toggle
         // Don't run on Django admin pages
@@ -431,6 +546,7 @@
     </script>
     
     {% block extra_js %}{% endblock %}
-    <script src="{% static 'js/pwa-register.js' %}" defer></script>
+    <script src="{% static 'js/pwa-register.js' %}?v=2" defer></script>
+{% include "onboarding/widget.html" %}
 </body>
 </html>

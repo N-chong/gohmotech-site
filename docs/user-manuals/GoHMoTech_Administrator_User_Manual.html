@@ -1,0 +1,657 @@
+<!doctype html><html><head><meta charset="utf-8"><title>GoHMoTech Administrator User Manual</title><style>
+@page {
+  size: A4;
+  margin: 18mm 16mm 19mm;
+  @bottom-center { content: "Administrator Manual — Page " counter(page) " of " counter(pages); color: #526259; font-size: 8pt; }
+}
+* { box-sizing: border-box; }
+html { font-family: Arial, Helvetica, sans-serif; color: #1c2520; font-size: 10.5pt; line-height: 1.42; }
+body { margin: 0; }
+h1 { color: #174f38; font-size: 22pt; border-bottom: 2px solid #174f38; padding-bottom: 5mm; margin: 0 0 7mm; break-before: page; }
+h1.cover-title { break-before: auto; border: 0; font-size: 31pt; margin: 22mm 0 4mm; padding: 0; text-align: center; }
+h1.cover-subtitle { break-before: auto; border: 0; font-size: 24pt; margin: 10mm 0 10mm; padding: 0; text-align: center; }
+h2 { color: #174f38; font-size: 16pt; margin: 7mm 0 3mm; break-after: avoid; }
+h3 { color: #2f654b; font-size: 12.5pt; margin: 5mm 0 2mm; break-after: avoid; }
+h4, h5, h6 { color: #2f654b; break-after: avoid; }
+p { margin: 0 0 3.2mm; orphans: 3; widows: 3; }
+strong { color: #14271d; }
+ul, ol { margin: 1.5mm 0 4mm 6mm; padding-left: 5mm; }
+li { margin-bottom: 1.2mm; }
+table { width: 100%; border-collapse: collapse; margin: 3mm 0 6mm; font-size: 8.8pt; break-inside: auto; }
+thead { display: table-header-group; }
+tr { break-inside: avoid; }
+th { color: #fff; background: #174f38; text-align: left; }
+th, td { border: 0.25mm solid #aebdb4; padding: 2mm; vertical-align: top; }
+tbody tr:nth-child(even) { background: #f2f6f3; }
+pre { white-space: pre-wrap; border: 0.25mm solid #b8c7be; background: #f4f7f5; padding: 4mm; break-inside: avoid; font-size: 8.5pt; }
+code { font-family: "DejaVu Sans Mono", monospace; background: #eef3f0; padding: 0 .7mm; }
+hr { border: 0; border-top: .25mm solid #b8c7be; margin: 8mm 0; }
+p:has(strong:first-child) { break-inside: avoid; }
+p:has(strong:first-child):has(strong:last-child) { padding: 3mm; border: .35mm solid #8aa596; background: #f4f8f5; }
+</style></head><body><h1 class="cover-title">GoHMoTech</h1>
+<h2 class="">Smart Goat Farm Monitoring System</h2>
+<h1 class="cover-subtitle">Administrator User Manual</h1>
+<p><strong>[GOHMOTECH LOGO PLACEHOLDER]</strong></p>
+<p><strong>[DEVICE PHOTO NEEDED: Complete GoHMoTech System]</strong></p>
+<p>What the photo should show: the complete installed prototype, including the protected main computer, both ESP32 controller units, camera, feeder, environmental sensors, door/light equipment, power distribution and safe cable routing.</p>
+<p>Important parts to highlight: 1. main computer enclosure; 2. main ESP32 controller; 3. feeder ESP32 controller; 4. camera; 5. sensor locations; 6. feeder; 7. protected power equipment.</p>
+<p><strong>Figure A-1. Complete GoHMoTech system.</strong></p>
+<table><thead><tr><th>Document field</th><th>Value</th></tr></thead><tbody>
+<tr><td>Manual version</td><td>1.0-draft</td></tr>
+<tr><td>System version</td><td><strong>[Information Needed: Deployed GoHMoTech release/version]</strong></td></tr>
+<tr><td>Date</td><td>5 October 2026</td></tr>
+<tr><td>Prepared by</td><td><strong>[Information Needed: Names of manual preparers]</strong></td></tr>
+<tr><td>Capstone group</td><td><strong>[Information Needed: Official capstone group name]</strong></td></tr>
+<tr><td>Institution</td><td><strong>[Information Needed: Institution name]</strong></td></tr>
+</tbody></table>
+<p><strong>Document status:</strong> implementation-verified draft. Complete all <strong>[Information Needed]</strong>, photo and screenshot items after checking the installed unit.</p>
+<hr>
+<h2 class="">Document control and printing</h2>
+<p>This manual is for GoHMoTech system administrators. It covers the physical equipment and the server-rendered GoHMoTech web portal. It does not document the separate Ionic mobile client.</p>
+<p>For the final PDF, use A4 paper, portrait orientation, normal margins and automatic page numbers in the footer in the form “Administrator Manual — Page x of y.” Update the table of contents after final photos and screenshots are inserted. Keep warning blocks with the procedure they protect.</p>
+<p><strong>IMPORTANT:</strong> Repository inspection confirms software capabilities and a finalized wiring design, but the development database contains no registered production devices. The exact installed component models, enclosure layout, power ratings, network address and hardware commissioning state must be checked on the physical prototype.</p>
+<h2 class="">Table of contents</h2>
+<ol>
+<li>Introduction and user role — 3  </li>
+<li>Safety information — 4  </li>
+<li>Know your GoHMoTech system — 5  </li>
+<li>Physical parts and installation — 7  </li>
+<li>Quick start — 9  </li>
+<li>Startup, normal operation, shutdown and restart — 10  </li>
+<li>Status indicators — 12  </li>
+<li>Initial administrator setup — 13  </li>
+<li>Administrator dashboard and navigation map — 14  </li>
+<li>Complete menu guide — 16  </li>
+<li>Common software tasks — 18  </li>
+<li>Environmental and feed monitoring — 21  </li>
+<li>Camera, detection, security and notifications — 23  </li>
+<li>SMS and Daily Summary — 24  </li>
+<li>Machine-learning model management — 26  </li>
+<li>Reports and PDF generation — 27  </li>
+<li>Accounts, profile and logout — 29  </li>
+<li>Maintenance and cleaning — 30  </li>
+<li>Troubleshooting — 31  </li>
+<li>Technical specifications — 33  </li>
+<li>Button, status and icon reference — 34  </li>
+<li>Quick-reference cards, do’s and don’ts, glossary — 35  </li>
+<p>Appendix A. Photo and screenshot plan — 37 Appendix B. Implementation verification record — 38</p>
+</ol>
+<hr>
+<h1 class="">1. Introduction and user role</h1>
+<h2 class="">1.1 What GoHMoTech does</h2>
+<p>GoHMoTech is a smart goat-house monitoring and control system. It brings herd records, temperature and humidity readings, indoor light, rain state, MQ-135 air-quality signals, feeder level, cameras, goat and person detection records, BLE goat proximity, equipment controls, notifications, SMS and farm reports into one web portal.</p>
+<p>The Raspberry Pi hosts the GoHMoTech services. ESP32 controllers read sensors and receive equipment commands over Wi-Fi. The installed camera supplies monitoring images. Detection models can record goats and people seen by a camera. The system can send configured SMS alerts, reminders and a Daily Summary through the selected SMS backend.</p>
+<p>GoHMoTech supports farm work; it does not replace direct inspection, veterinary judgment, security judgment or safe electrical practices. Missing data never means that farm conditions are normal.</p>
+<h2 class="">1.2 Administrator role</h2>
+<p>An Administrator is a Django staff or superuser account. The confirmed interface allows an Administrator to:</p>
+<ul>
+<li>see the Administrator Overview and System Monitoring pages;</li>
+<li>manage goat inventory, goat details, weights, photos and BLE assignments;</li>
+<li>view BLE tracking and live goat detection;</li>
+<li>operate the door, light and feeder and manage schedules/rules;</li>
+<li>review cameras, person detections, alerts and notifications;</li>
+<li>generate farm and detailed reports and export CSV/Excel;</li>
+<li>configure SMS, reminders, Daily Summary and review SMS logs;</li>
+<li>upload, validate, activate and deactivate ML models;</li>
+<li>review device status;</li>
+<li>use Django Settings for registered data and user administration;</li>
+<li>manage marketplace users, seller applications, support and listings.</li>
+</ul>
+<p>Farm Owner accounts can change farm data and use farm controls, reports and security. Farm Operator accounts are read-only. Marketplace-only accounts do not receive farm access.</p>
+<p><strong>NOTE:</strong> “Registered Users” in the navigation is the marketplace-user list. General Django users and group assignment are managed through <strong>Settings</strong> (<code>/admin/</code>).</p>
+<hr>
+<h1 class="">2. Safety information</h1>
+<h2 class="">2.1 Signal words</h2>
+<p><strong>WARNING</strong> means a risk of injury, electric shock, fire, animal injury or serious equipment damage.</p>
+<p><strong>CAUTION</strong> means a risk of data loss, incorrect operation or minor equipment damage.</p>
+<p><strong>IMPORTANT</strong> identifies an action required for reliable operation.</p>
+<p><strong>NOTE</strong> provides useful operating information.</p>
+<h2 class="">2.2 Safety rules</h2>
+<p><strong>WARNING</strong></p>
+<ul>
+<li>Keep mains-voltage and 12 V power equipment inside the approved protected enclosure. Only an authorized person may open or work on powered electrical equipment.</li>
+<li>Disconnect the relevant power source before hardware maintenance. Verify that voltage is absent before touching wiring.</li>
+<li>Keep electronics dry and protected from rain, wash water, condensation and excessive moisture.</li>
+<li>Use only the verified power supplies, buck converters, fuses, relays/drivers, wire sizes and connectors for the installed equipment.</li>
+<li>Keep cables protected from goats and secured against pulling, chewing and trip hazards.</li>
+<li>Do not touch exposed contacts. Do not operate damaged or wet equipment.</li>
+</ul>
+<p><strong>CAUTION</strong></p>
+<ul>
+<li>Keep Raspberry Pi and enclosure ventilation clear.</li>
+<li>Do not move sensors, the feed-level sensor or camera without approval; movement changes measurements and coverage.</li>
+<li>Do not disconnect Raspberry Pi power during a model upload, database work, update or report generation.</li>
+<li>Do not assume a displayed command means that an actuator physically moved. Current ESP32 control records a command as <strong>Sent</strong> or <strong>Queued</strong>; the firmware does not provide positive execution acknowledgement.</li>
+</ul>
+<hr>
+<h1 class="">3. Know your GoHMoTech system</h1>
+<h2 class="">3.1 Confirmed system components</h2>
+<table><thead><tr><th>Component</th><th>Purpose</th><th>Confirmed design/location</th><th>User guidance</th></tr></thead><tbody>
+<tr><td>Raspberry Pi 5</td><td>Main GoHMoTech server</td><td>Main protected computer area; exact enclosure location is installation-specific</td><td>Keep powered, dry, ventilated and network-connected. Do not remove power suddenly.</td></tr>
+<tr><td>ESP32 1, main controller</td><td>Door relay, light relay, LDR, DHT21, rain sensor, MQ-135 and three physical-button inputs in the finalized wiring design</td><td>Main controller enclosure</td><td>Observe status through the web portal. Do not handle powered wiring.</td></tr>
+<tr><td>ESP32 2, feeder controller</td><td>Feeder servo and ultrasonic feed-level sensor</td><td>At/near feeder in a protected enclosure</td><td>Keep its sensor position and cabling fixed.</td></tr>
+<tr><td>DHT21/AM2301</td><td>Air temperature in °C and relative humidity in %</td><td>GPIO14 in the finalized design; installed location <strong>[Information Needed]</strong></td><td>Keep exposed to representative air but protected from direct water.</td></tr>
+<tr><td>LDR and divider</td><td>Indoor light level, shown as raw and calibrated percentage when available</td><td>GPIO34; goat-house interior <strong>[Information Needed]</strong></td><td>Do not cover it or shine a test light continuously.</td></tr>
+<tr><td>Rain sensor, digital output</td><td>Reports rain detected/dry</td><td>GPIO17; outdoor mounting <strong>[Information Needed]</strong></td><td>Keep mounting secure; do not scrape or chemically clean the plate.</td></tr>
+<tr><td>MQ-135 module</td><td>Reports raw ADC/voltage and estimated PPM only if calibrated</td><td>GPIO35 through the finalized voltage divider</td><td>Treat uncalibrated output as a relative signal, not an exact gas measurement.</td></tr>
+<tr><td>Ultrasonic feed-level sensor</td><td>Measures distance to feed; firmware sends distance and percentage</td><td>GPIO18/19 on ESP32 2; above feed surface</td><td>Keep perpendicular to feed, outside the fill stream and at the calibrated position.</td></tr>
+<tr><td>Feeder servo</td><td>Operates the dispensing mechanism</td><td>ESP32 2, GPIO25 signal, separate verified supply</td><td>Keep hands and animals clear during movement. Do not force the mechanism.</td></tr>
+<tr><td>Door actuator and relay/driver</td><td>Opens/closes the goat-house door</td><td>ESP32 1, GPIO26/27 control; physical location <strong>[Information Needed]</strong></td><td>Keep travel path clear. Confirm the actual position after a command.</td></tr>
+<tr><td>Light and relay</td><td>Switches goat-house light</td><td>ESP32 1, GPIO13 control</td><td>Do not exceed the installed relay/load rating.</td></tr>
+<tr><td>Three momentary buttons</td><td>Feed, light and door requests in finalized design</td><td>ESP32 1 GPIO32/33/25; enclosure position <strong>[Information Needed]</strong></td><td>Press once and observe the physical result. Do not hold or repeatedly press.</td></tr>
+<tr><td>IP/RTSP/HTTP/MJPEG/USB camera support</td><td>Live view, snapshots and detection source</td><td>Installed camera position <strong>[Information Needed]</strong></td><td>Keep lens clean, view unobstructed and angle fixed.</td></tr>
+<tr><td>Load cell with HX711</td><td>Supplies live goat weighing data when installed</td><td>Separate scale unit; exact model/location <strong>[Information Needed]</strong></td><td>Use only on a stable, empty platform; confirm the value before saving.</td></tr>
+<tr><td>BLE beacon and receiver support</td><td>Shows whether an assigned goat is detected nearby and proximity class</td><td>Beacon on goat; receiver location <strong>[Information Needed]</strong></td><td>BLE is proximity, not GPS. Secure the beacon safely.</td></tr>
+<tr><td>Network/router</td><td>Connects Pi, ESP32 units, camera and user device</td><td>Farm network <strong>[Information Needed]</strong></td><td>Keep credentials private and network equipment powered.</td></tr>
+</tbody></table>
+<p><strong>[DEVICE PHOTO NEEDED: Raspberry Pi 5 Installed in GoHMoTech]</strong></p>
+<p>What the photo should show: the Raspberry Pi in its normal protected, ventilated installation. Important parts: enclosure, approved power connection, network connection and ventilation. <strong>Figure A-2. Raspberry Pi main unit.</strong></p>
+<h2 class="">3.2 Items that must be confirmed on the installed prototype</h2>
+<ul>
+<li>Raspberry Pi RAM, storage device/capacity, operating-system release and official power-supply rating.</li>
+<li>Exact ESP32 board models and quantity actually commissioned.</li>
+<li>Exact ultrasonic, rain, MQ-135 module, servo, actuator, relay/driver, camera, load-cell/HX711, BLE beacon/receiver and power-supply models.</li>
+<li>Installed fuse ratings, enclosure ingress protection, connector labels and cable colors.</li>
+<li>Whether the finalized two-ESP32 sensor split and three physical buttons have been flashed and commissioned. The wiring guide lists firmware integration changes that were still required when written.</li>
+</ul>
+<hr>
+<h1 class="">4. Physical parts and installation</h1>
+<h2 class="">4.1 Parts identification photo plan</h2>
+<p><strong>[DEVICE PHOTO NEEDED: Front View of Main GoHMoTech Unit]</strong></p>
+<p>Show the closed enclosure in its operating location. Label only verified installed items: enclosure, ventilation, power entry, network entry and warning label. <strong>Figure A-3. Main unit front view.</strong></p>
+<p><strong>[DEVICE PHOTO NEEDED: Rear or Connection View]</strong></p>
+<p>Show protected, labeled connections. Highlight Raspberry Pi power/network, controller power, camera/network and cable strain relief. Do not expose passwords or unsafe energized terminals. <strong>Figure A-4. Main unit connection view.</strong></p>
+<p><strong>[DEVICE PHOTO NEEDED: ESP32 Main Monitoring Unit]</strong></p>
+<p>Show ESP32 1, terminal labels and its connected sensor/relay cables. Highlight controller, DHT21, LDR, rain and MQ-135 connections, door/light outputs and installed buttons. <strong>Figure A-5. Main ESP32 controller.</strong></p>
+<p><strong>[DEVICE PHOTO NEEDED: Feed Monitoring Unit]</strong></p>
+<p>Show feed container, ultrasonic sensor, stable mount, sensor cable, servo/mechanism and ESP32 2 enclosure. <strong>Figure A-6. Feed monitoring and dispensing unit.</strong></p>
+<p><strong>[DEVICE PHOTO NEEDED: Camera Installation]</strong></p>
+<p>Show the camera’s field of view and protected cable route. Highlight lens, mount, monitored zone and network/power cable. <strong>Figure A-7. Camera installation.</strong></p>
+<h2 class="">4.2 Location guidelines</h2>
+<ul>
+<li><strong>Raspberry Pi:</strong> dry, ventilated, protected, accessible to an authorized technician and connected to a stable network.</li>
+<li><strong>ESP32/controllers:</strong> fixed to standoffs inside protected enclosures. Separate mains, 12 V, 5 V and signal cable routes.</li>
+<li><strong>Environmental sensors:</strong> fixed in representative locations, away from splashing, direct heater airflow and animal contact.</li>
+<li><strong>Camera:</strong> stable, protected and aimed at the intended area without blocking paths or private areas outside the farm.</li>
+<li><strong>Feed sensor:</strong> perpendicular to the feed surface, away from the fill stream and protected from accidental movement.</li>
+<li><strong>Scale:</strong> firm and level, with the load platform unobstructed.</li>
+</ul>
+<p><strong>[Information Needed: Approved installation drawing with exact positions and mounting heights]</strong></p>
+<h2 class="">4.3 Before turning on</h2>
+<ol>
+<li>Check that all enclosures are closed and dry.</li>
+<li>Inspect visible cables for cuts, loose connectors, heat damage or animal damage.</li>
+<li>Confirm that animals cannot reach exposed electronics or moving mechanisms.</li>
+<li>Check that Raspberry Pi, router/network, camera and both ESP32 units have their approved power and data connections.</li>
+<li>Confirm the camera lens and sensor openings are unobstructed.</li>
+<li>Confirm the door and feeder mechanisms can move safely.</li>
+<li>Do not energize the system if a cable, enclosure or power device is damaged or wet.</li>
+</ol>
+<hr>
+<h1 class="">5. Administrator quick start</h1>
+<ol>
+<li>Complete the pre-power inspection in Section 4.3.</li>
+<li>Apply power using the site’s approved power sequence. <strong>[Information Needed: Exact switch names and order]</strong></li>
+<li>Wait for the Raspberry Pi, network equipment, camera and ESP32 units to start. <strong>[Information Needed: Verified normal startup time]</strong></li>
+<li>On an authorized computer or phone, open <strong>[Information Needed: Production GoHMoTech URL/IP address]</strong>.</li>
+<li>Enter the Administrator username or email and password; select <strong>Sign in securely</strong>.</li>
+<li>In <strong>Overview</strong>, check main controller, camera, detection model, Environment &amp; Feed and Active Alerts.</li>
+<li>Open <strong>Monitor</strong> and check device cards/recent activity. A configured device is not automatically online; use its live status/last data.</li>
+<li>Open <strong>Monitoring → Farm Monitoring</strong> and confirm current readings.</li>
+<li>Open <strong>Security &amp; Alerts</strong> and review unread/unresolved items.</li>
+<li>Open <strong>SMS Notifications</strong> and check System diagnostics, Last attempt and Next run.</li>
+</ol>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Administrator Dashboard]</strong></p>
+<p>Show the entire Overview page. Highlight navigation menu, Environment &amp; Feed, System Status, Automation, Active Alerts, Recent Activity, camera panel, bell and user menu. <strong>Figure A-8. Administrator Overview.</strong></p>
+<hr>
+<h1 class="">6. Startup, normal operation, shutdown and restart</h1>
+<h2 class="">6.1 Powering on</h2>
+<ol>
+<li>Perform the checks in Section 4.3.</li>
+<li>Power the network equipment if it is not already running.</li>
+<li>Power the protected GoHMoTech equipment using the approved site switch/sequence.</li>
+<li>Do not press actuator buttons while controllers are starting.</li>
+<li>Open the portal and sign in.</li>
+<li>Confirm current sensor timestamps, controller status, camera status and active model.</li>
+<li>Perform one supervised equipment test only if maintenance or commissioning requires it.</li>
+</ol>
+<p>Expected successful result: the portal loads; current data has a recent timestamp; configured controllers and camera show their real state; no unexplained high/critical alert remains open.</p>
+<p><strong>[DEVICE PHOTO NEEDED: GoHMoTech Powered On]</strong> — show the closed powered installation and only actual visible power/status indicators. <strong>Figure A-9. Powered system.</strong></p>
+<h2 class="">6.2 Normal operation</h2>
+<p>During normal operation, ESP32 devices send readings to the server. The feeder controller reports feed distance/percentage, the camera provides images, and configured detection processes create records. The server stores data, runs schedules and notifications, builds reports and can send SMS. Users normally leave the system running; daily power cycling is not required.</p>
+<p><strong>NOTE:</strong> The controller’s documented environmental reporting interval is 30 seconds, and the current stale-data policy defaults to 90 seconds. Treat the page timestamp—not a memorized interval—as the primary check.</p>
+<h2 class="">6.3 Safe shutdown</h2>
+<p>The inspected web portal has no confirmed <strong>Shutdown Raspberry Pi</strong> control.</p>
+<ol>
+<li>Stop model uploads and wait for any PDF/export operation to finish.</li>
+<li>Avoid shutting down during scheduled actuator activity or SMS processing.</li>
+<li>Save any form being edited.</li>
+<li>Use the site-approved Raspberry Pi operating-system shutdown procedure from an authorized local/remote session.</li>
+<li>Wait until shutdown is complete, then isolate power using the approved switch.</li>
+</ol>
+<p><strong>WARNING:</strong> Sudden power removal may cause data loss or storage corruption.</p>
+<p><strong>[Information Needed: Exact approved shutdown command/interface, account authorized to use it, and physical indication that shutdown is complete]</strong></p>
+<h2 class="">6.4 Restart</h2>
+<p>Restart only for authorized maintenance, after a service/system fault that did not recover, or after an update that requires it. Finish current work, use the approved operating-system restart procedure, then repeat the checks in Section 6.1. Do not repeatedly unplug and reconnect the unit.</p>
+<p><strong>[Information Needed: Exact approved restart command/interface and escalation contact]</strong></p>
+<hr>
+<h1 class="">7. Status indicators</h1>
+<table><thead><tr><th>Interface status</th><th>Meaning</th><th>Administrator action</th></tr></thead><tbody>
+<tr><td>Online</td><td>Recent device activity meets the system’s freshness rule</td><td>No action if data timestamps are current.</td></tr>
+<tr><td>Check device / Offline</td><td>No recent activity or camera not active</td><td>Check last update, device power and network.</td></tr>
+<tr><td>Active / Inactive</td><td>Configuration or camera state; not always a live heartbeat</td><td>Check recent communication before concluding it is online.</td></tr>
+<tr><td>No data / <code>—</code></td><td>No confirmed value is available</td><td>Inspect the sensor/device; do not assume normal conditions.</td></tr>
+<tr><td>Sent to device</td><td>Command stored while device was considered online</td><td>Watch the equipment and next state/report. It is not execution confirmation.</td></tr>
+<tr><td>Queued — device offline</td><td>Command stored; device was offline</td><td>Restore device connection and supervise the eventual action.</td></tr>
+<tr><td>Failed</td><td>Operation did not complete</td><td>Open the error/status details and correct the cause.</td></tr>
+<tr><td>Unread / Unresolved</td><td>Notification has not been read/resolved</td><td>Review the source event and act before resolving.</td></tr>
+<tr><td>Unreviewed / Reviewed</td><td>Security detection review state</td><td>Inspect snapshot/time/source; record a truthful outcome.</td></tr>
+<tr><td>New / Under Review / Confirmed Threat / Dismissed</td><td>Person-detection outcome</td><td>Do not label a person an intruder solely from detection.</td></tr>
+<tr><td>Uploaded (pending validation)</td><td>Model is stored but cannot yet be activated</td><td>Select <strong>Validate</strong>.</td></tr>
+<tr><td>Validated / Active / Inactive / Archived / Rejected</td><td>Model lifecycle state</td><td>Activate only the approved validated model.</td></tr>
+<tr><td>Pending / Processing / Sent / Failed / Skipped</td><td>Daily Summary run state</td><td>Review error and SMS settings for failed/skipped runs.</td></tr>
+</tbody></table>
+<p><strong>[Information Needed: Physical LED meanings on the exact installed Raspberry Pi, ESP32 boards, camera, router and power equipment]</strong></p>
+<hr>
+<h1 class="">8. Initial administrator setup</h1>
+<h2 class="">8.1 Hardware and network commissioning</h2>
+<p>Only trained personnel should perform wiring and first power tests.</p>
+<ol>
+<li>Record exact component model/nameplate information and complete the finalized wiring checklist.</li>
+<li>Verify supply voltages before connecting electronics.</li>
+<li>Commission ESP32 1 and ESP32 2 separately, then sensors one at a time.</li>
+<li>Confirm Wi-Fi/API authentication and current timestamps.</li>
+<li>Calibrate installed LDR full-scale points, ultrasonic empty/full distance and load cell. Calibrate MQ-135 before enabling a PPM claim.</li>
+<li>Verify safe door interlock, travel limits/timeout and feeder close-on-timeout.</li>
+<li>Register real devices/cameras in <strong>Settings</strong> or the appropriate device/camera page.</li>
+<li>Test the complete system under supervision before unattended use.</li>
+</ol>
+<p><strong>[Information Needed: Commissioning record proving the finalized sensor split and buttons are installed and tested]</strong></p>
+<h2 class="">8.2 First portal setup</h2>
+<ol>
+<li>Obtain the bootstrap superuser through the project’s secure handover process. Do not place a password in this manual.</li>
+<li>Sign in and open <strong>Settings</strong>.</li>
+<li>Create users and assign the correct group: <strong>Farm Owners</strong> for owners, <strong>Farm Operators</strong> for read-only farm staff. Do not give staff/superuser status unless the person is an Administrator.</li>
+<li>Register devices and camera records with their verified identifiers and locations.</li>
+<li>Open <strong>Monitor</strong> and verify current communication; use the authorized Device Status page at <code>/iot/devices/</code> when a full device list is needed.</li>
+<li>Open <strong>Farm → Manage Goats</strong> and add/verify herd records.</li>
+<li>Open <strong>Operate</strong> and verify actuator entries, automation mode and schedules.</li>
+<li>Open <strong>Security &amp; Alerts → ML Models</strong> and verify the approved model is validated and active.</li>
+<li>Open <strong>SMS Notifications</strong>; select the real backend, master switch, recipient, Daily Summary time, alert rules and reminders. Send a test SMS.</li>
+<li>Open <strong>Reports</strong> and generate a short-period Farm PDF to verify print output.</li>
+</ol>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Settings User and Group Setup]</strong> — show the Users page and group assignment without personal data. Highlight Add user, Active, Staff status and Groups. <strong>Figure A-10. Administrator account setup.</strong></p>
+<hr>
+<h1 class="">9. Administrator dashboard and navigation map</h1>
+<h2 class="">9.1 Login page</h2>
+<ol>
+<li>Open the production GoHMoTech address.</li>
+<li>Enter <strong>Username or email</strong>.</li>
+<li>Enter <strong>Password</strong>. Use the eye button only when no one else can see the screen.</li>
+<li>Select <strong>Sign in securely</strong>.</li>
+</ol>
+<p>The page also shows <strong>Forgot password?</strong>, an optional <strong>Continue with Google</strong> control when OAuth is configured, and a marketplace link. After successful Administrator sign-in, the system opens <strong>Overview</strong>.</p>
+<p>Common errors: check spelling and keyboard state; confirm the account is active; use <strong>Forgot password?</strong> when email reset is configured; contact the system custodian for a role/permission error.</p>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Login Page]</strong></p>
+<p>Highlight Username or email, Password, password visibility, Forgot password and Sign in securely. <strong>Figure A-11. Farm Portal Sign In.</strong></p>
+<h2 class="">9.2 Overview</h2>
+<p>The Administrator Overview answers “What is happening across the farm and system now?” It shows herd summary, BLE tracking, Environment &amp; Feed, System Status, Automation, outdoor weather when available, the 3D goat house, Active Alerts, Recent Activity and a camera panel.</p>
+<p><strong>IMPORTANT:</strong> <strong>Last Camera Count</strong> is the latest camera detection count, not the registered herd total. Outdoor Weather comes from Open-Meteo; local sensors remain separate.</p>
+<h2 class="">9.3 Navigation map</h2>
+<pre><code>Administrator sign-in
+└── Overview
+    ├── Monitor
+    ├── Operate
+    ├── Security
+    │   ├── Overview
+    │   ├── Alerts
+    │   ├── Security Detection
+    │   └── ML Models
+    ├── Reports
+    ├── Goat Inventory
+    ├── Goat Tracking
+    ├── Marketplace
+    ├── Manage Marketplace
+    ├── Registered Users
+    ├── Seller Applications
+    ├── Support Tickets
+    ├── Live Detection
+    ├── SMS Notifications
+    │   ├── Settings
+    │   ├── Reminders
+    │   └── Logs
+    ├── Settings (Django administration)
+    └── Logout</code></pre>
+<p>On small screens the bottom bar shows <strong>Overview</strong>, <strong>Monitor</strong>, <strong>Herd</strong>, <strong>Operate</strong> and <strong>More</strong>. <strong>More</strong> opens the full navigation drawer.</p>
+<hr>
+<h1 class="">10. Complete Administrator menu guide</h1>
+<table><thead><tr><th>Menu</th><th>Purpose and main information/actions</th><th>When to use</th></tr></thead><tbody>
+<tr><td>Overview</td><td>Current herd, BLE, sensor/feed, controller/camera/model, automation, weather, alerts, activity and camera summary</td><td>First check of the day and after startup</td></tr>
+<tr><td>Monitor</td><td>System Monitoring: environment, alert, camera, automation, device and recent-reading panels</td><td>Diagnose current farm/system condition</td></tr>
+<tr><td>Operate</td><td>Door Motor, Light Relay, Servo Feeder, Automation mode, time schedules, sensor rules and recent actuator activity</td><td>Supervised control and automation setup</td></tr>
+<tr><td>Security</td><td>Notification and person-detection review; Administrator-only ML Models tab</td><td>Respond to security/system events</td></tr>
+<tr><td>Reports</td><td>Report Center, period selector, Farm PDF, detailed reports, CSV, Excel and print/PDF</td><td>Historical review and documentation</td></tr>
+<tr><td>Goat Inventory</td><td>Search/filter/list goats, add goat, compare and open details</td><td>Maintain herd records</td></tr>
+<tr><td>Goat Tracking</td><td>BLE proximity status, receivers and Find Goat</td><td>Locate an assigned beacon near receivers</td></tr>
+<tr><td>Marketplace</td><td>Browse farm/community listings</td><td>View available goats/listings</td></tr>
+<tr><td>Manage Marketplace</td><td>Administrator marketplace dashboard</td><td>Administer listings and transactions</td></tr>
+<tr><td>Registered Users</td><td>Marketplace registered-user records</td><td>Review marketplace users; not farm-role assignment</td></tr>
+<tr><td>Seller Applications</td><td>Seller approval workflow</td><td>Review applicants</td></tr>
+<tr><td>Support Tickets</td><td>Customer-service tickets</td><td>Respond to user issues</td></tr>
+<tr><td>Live Detection</td><td>Live camera goat-detection feed and recent results</td><td>Supervise camera detection</td></tr>
+<tr><td>SMS Notifications</td><td>SMS Settings, Reminders, Logs and diagnostics</td><td>Configure and audit SMS</td></tr>
+<tr><td>Settings</td><td>Django administration for authorized records and users</td><td>Privileged configuration only</td></tr>
+<tr><td>Bell</td><td>Opens Security/notifications; badge is unread count</td><td>Review new items</td></tr>
+<tr><td>User name</td><td>Settings (Administrator) and Logout</td><td>Account menu</td></tr>
+</tbody></table>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Administrator Navigation Menu]</strong> — show the full desktop sidebar and top bar. Highlight menu order, bell, theme toggle and user menu. <strong>Figure A-12. Administrator navigation.</strong></p>
+<hr>
+<h1 class="">11. Common software tasks</h1>
+<h2 class="">11.1 View environmental data</h2>
+<p><strong>Navigation path:</strong> Monitor</p>
+<ol>
+<li>Open <strong>Monitor</strong>.</li>
+<li>Find the latest temperature, humidity, light, rain and MQ-135 information that is present.</li>
+<li>Check the measurement timestamp and source device.</li>
+<li>Review active alerts and recent readings.</li>
+<li>If a value is absent or stale, open <strong>Device Status</strong> and inspect the device before interpreting conditions.</li>
+</ol>
+<h2 class="">11.2 Operate door, light or feeder</h2>
+<p><strong>Navigation path:</strong> Operate → equipment card</p>
+<ol>
+<li>Confirm people, goats and objects are clear of the mechanism.</li>
+<li>Confirm the controller banner indicates current communication.</li>
+<li>Select the intended action: door <strong>Open/Close/Stop</strong>, light <strong>Turn ON/Turn OFF</strong>, or feeder activation shown by the page.</li>
+<li>Read the returned result: <strong>Sent</strong>, <strong>Queued</strong> or <strong>Failed</strong>.</li>
+<li>Observe the real equipment. A <strong>Sent</strong> result is not physical confirmation.</li>
+</ol>
+<p><strong>WARNING:</strong> Do not repeat a feeder command merely because the screen lacks execution acknowledgement. Inspect the mechanism/feed first to avoid unintended repeated feeding.</p>
+<h2 class="">11.3 Manage schedules/rules</h2>
+<p><strong>Navigation path:</strong> Operate → Time-based schedules or Sensor rules</p>
+<p>Use <strong>Add schedule</strong> or <strong>Add rule</strong>, select only available page fields, review days/time/action, then save. Use <strong>Pause/Resume</strong> to temporarily change a schedule. <strong>Delete schedule/rule</strong> is permanent and requires confirmation. The page groups door, light and feeder schedules separately.</p>
+<h2 class="">11.4 Manage goats</h2>
+<p><strong>Navigation path:</strong> Goat Inventory</p>
+<ol>
+<li>Use search/filter controls to find a goat.</li>
+<li>Select the goat to open details, or select <strong>Add Goat</strong> to create a record.</li>
+<li>Confirm ID/tag, name, breed, gender and date of birth. Complete health, vaccination, status and notes only from real farm records.</li>
+<li>On details, use <strong>Auto / Live Scale</strong> or <strong>Manual Entry</strong> for weight. Start weighing, wait for a stable value, select <strong>Save Weight</strong>, and confirm before saving.</li>
+<li>Upload/capture real photos when needed; delete only the intended image.</li>
+<li>Update status using the page control. The implemented statuses are Active, Sold, Dead and Missing; removal is by status/archive behavior, not an exposed “delete goat” button on this page.</li>
+</ol>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Goat List Page]</strong> — show search, filters, Add Goat, Compare and goat cards/table. <strong>Figure A-13. Goat Inventory.</strong></p>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Goat Details Page]</strong> — show weight modes/history, basic information, BLE, health, vaccination, notes and photos. <strong>Figure A-14. Goat details.</strong></p>
+<h2 class="">11.5 Review a security detection</h2>
+<p><strong>Navigation path:</strong> Security → Security Detection</p>
+<ol>
+<li>Filter by Type, Review state or dates if needed.</li>
+<li>Check snapshot, type, source, confidence, date/time and status.</li>
+<li>Open the record.</li>
+<li>Compare the image with farm context; person/face detection does not identify anyone.</li>
+<li>Mark it reviewed and record an accurate outcome: Under Review, Confirmed Threat or Dismissed/False Alarm as supported.</li>
+</ol>
+<h2 class="">11.6 Check device status</h2>
+<p><strong>Navigation path:</strong> <code>/iot/devices/</code> (authorized Device Status page; it is not a separate item in the Administrator desktop sidebar)</p>
+<p>The Device Status page shows total, configured active/inactive counts, device types and <strong>Online/Check device</strong> badges. Open <strong>View Details</strong> for device identity, location, active state, 24-hour sensor statistics, recent alerts and recent sensor data. Administrators can use <strong>Add Device</strong> or <strong>Edit Device</strong> links into Settings.</p>
+<h2 class="">11.7 Logout</h2>
+<p>Select the user menu or sidebar <strong>Logout</strong> button. Logout is submitted securely as a form. Always log out on a shared device.</p>
+<hr>
+<h1 class="">12. Environmental and feed monitoring</h1>
+<h2 class="">12.1 Temperature and humidity</h2>
+<p>The DHT21/AM2301 produces temperature in degrees Celsius and relative humidity in percent. The system can create configured high/low threshold alerts and a stale-sensor alert. Thresholds are intentionally unset until an Administrator supplies approved values.</p>
+<p>If readings stop: check timestamp, device status, 3.3 V/data connection, mounting and sensor condition. Do not invent or copy generic animal thresholds; use farm/veterinary guidance.</p>
+<h2 class="">12.2 Indoor light</h2>
+<p>The LDR reports a raw ESP32 ADC value and a calibrated light percentage when calibration values are available. It is an indoor light-level indicator, not a certified lux meter unless the installation has been separately calibrated and documented.</p>
+<h2 class="">12.3 Rain</h2>
+<p>The installed design records a binary <strong>rain detected/dry</strong> value from a digital rain module. It does not measure rainfall amount.</p>
+<h2 class="">12.4 MQ-135 air-quality signal</h2>
+<p>The portal can store raw ADC, measured input voltage, estimated PPM and a calibration flag. Unless <strong>calibrated</strong> is true and a documented calibration exists, interpret the raw/voltage reading only as a relative change. Do not use it as an exact gas concentration or safety instrument.</p>
+<h2 class="">12.5 Feed level</h2>
+<p>The ultrasonic sensor measures distance to the feed surface. ESP32 firmware reports distance in centimeters and a percentage. The server stores capacity and calculates estimated grams from the received percentage. A low-feed alert is raised when stored grams fall below the configured low threshold.</p>
+<p>If feed appears wrong:</p>
+<ol>
+<li>Inspect actual feed safely.</li>
+<li>Remove any obstruction in the sensor path.</li>
+<li>Check that the sensor is perpendicular and has not moved.</li>
+<li>Check distance/percentage and last update.</li>
+<li>Recalibrate the installed empty/full distance if mounting changed.</li>
+</ol>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Environmental and Feed Monitoring Page]</strong></p>
+<p>Show Monitor with current supported values, timestamps, alerts and recent readings. <strong>Figure A-15. Environmental and feed monitoring.</strong></p>
+<hr>
+<h1 class="">13. Camera, detection, security and notifications</h1>
+<h2 class="">13.1 Camera operation</h2>
+<p>The camera system supports configured Wi-Fi IP, RTSP, HTTP/MJPEG or USB sources. Camera records include location, active/status, last connection/error and goat-detection setting. Keep the lens clean and view clear. Do not change IP, credentials, port, URL or angle without recording the change.</p>
+<h2 class="">13.2 Goat detection</h2>
+<p><strong>Live Detection</strong> uses an active model to record camera events with goat count, confidence and bounding boxes. It is evidence from one camera frame, not the official herd inventory.</p>
+<h2 class="">13.3 Person detection</h2>
+<p>The Security page records Person Detected, Unknown Person or Face Detected events with snapshot, confidence, source and review state. These are detection categories only. GoHMoTech does not perform identity matching or facial recognition.</p>
+<h2 class="">13.4 Notifications and alerts</h2>
+<p>A notification is the unified inbox entry. Types are Missing Goat, Person/Intrusion Detection, Device/Sensor Anomaly, System and Other. Severities are Critical, High, Medium, Low and Informational.</p>
+<p><strong>Navigation path:</strong> Security → Alerts</p>
+<ol>
+<li>Filter by Severity, Type, Status or date, or search title/source.</li>
+<li>Unread rows require review. <strong>Mark all read</strong> changes read state only; it does not fix a cause.</li>
+<li>Open a related event where available.</li>
+<li>Resolve only after action has been completed; enter truthful resolution notes.</li>
+<li>Reopen if the condition returns or was resolved in error.</li>
+</ol>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Security and Notifications Page]</strong> — show tabs, summary cards, filters, unread state and detection table. <strong>Figure A-16. Security and notifications.</strong></p>
+<hr>
+<h1 class="">14. SMS and Daily Summary</h1>
+<h2 class="">14.1 SMS configuration</h2>
+<p><strong>Navigation path:</strong> SMS Notifications → Settings</p>
+<ol>
+<li>Check the backend/status banner and System diagnostics.</li>
+<li>Enter the system Recipient number in Philippine format.</li>
+<li>Set the master <strong>Enable SMS</strong> switch.</li>
+<li>Configure <strong>Daily Summary</strong>, <strong>Reminders</strong> and <strong>Alerts</strong> separately.</li>
+<li>For alerts, select minimum severity, allowed types (Missing Goat, Person Detection, Device Anomaly) and cooldown minutes.</li>
+<li>Select <strong>Save settings</strong>.</li>
+<li>In <strong>Test SMS</strong>, optionally enter a number; select <strong>Send test</strong> and read the result.</li>
+<li>Use <strong>Check balance</strong> when the live Semaphore backend is configured.</li>
+</ol>
+<p>API keys and sender credentials are server-side and must never appear in the page, screenshots or manual.</p>
+<h2 class="">14.2 Daily Summary</h2>
+<p>The Daily Summary contains current goat health counts, that day’s feed/door/light event counts, latest temperature/humidity received that day, and alert counts. It uses Asia/Manila local time.</p>
+<p>To configure: enable SMS, enable <strong>Send a daily summary</strong>, choose <strong>Send time</strong>, save, then inspect <strong>Daily Summary</strong>, <strong>Last attempt</strong>, result/error and <strong>Next run</strong> under diagnostics. The default in code is 7:00 AM; 10:00 PM occurs only when the page is configured to 22:00.</p>
+<p>If the Pi misses the exact minute, the first scheduler tick later on the same local day makes one catch-up attempt. Previous days are not replayed, and terminal/processing runs are not automatically retried to avoid duplicate SMS.</p>
+<h2 class="">14.3 Reminders and logs</h2>
+<p>The <strong>Reminders</strong> tab can add/edit/delete feeding, cleaning, maintenance, sensor-checking or custom reminders with time, message and selected days. No selected days means every day. The <strong>Logs</strong> tab filters send history by type, status, dates and search text.</p>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: SMS Configuration Page]</strong> — show Settings, General, Daily Summary, Alerts, Test SMS and diagnostics without phone numbers or secrets. <strong>Figure A-17. SMS configuration.</strong></p>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Daily Summary Configuration]</strong> — highlight enable switch, Send time, Last attempt, result/error and Next run. <strong>Figure A-18. Daily Summary status.</strong></p>
+<hr>
+<h1 class="">15. Machine-learning model management</h1>
+<p><strong>Navigation path:</strong> Security → ML Models. A separate Administrator page also exists at <code>/ml/models/</code>.</p>
+<ol>
+<li>Enter model name and version.</li>
+<li>Select category and model type. Select RF-DETR size only when RF-DETR is chosen.</li>
+<li>Select an allowed model file. The current upload control accepts <code>.pt</code>, <code>.pth</code>, <code>.ckpt</code>, <code>.onnx</code>, <code>.tflite</code>, <code>.h5</code> and <code>.keras</code>; server validation may support additional documented weight formats. Maximum configured size is 500 MB.</li>
+<li>Check the displayed filename, type and size.</li>
+<li>Select <strong>Upload model</strong>.</li>
+<li>Watch <strong>Preparing</strong>, then <strong>Uploading</strong>. The page displays percentage, MB uploaded, MB remaining and chunk count.</li>
+<li>Wait for <strong>Upload complete</strong> while the server assembles, validates basic file rules and stores it privately.</li>
+<li>Confirm success or read the failure message. Upload success leaves the model <strong>Uploaded (pending validation)</strong>.</li>
+<li>Select <strong>Validate</strong> and wait for <strong>Validated</strong>.</li>
+<li>Select <strong>Activate</strong> only after approval. Activation loads the candidate before changing the active model. Use <strong>Deactivate</strong> when required.</li>
+</ol>
+<p><strong>IMPORTANT:</strong> Do not disconnect power or network while a model upload, validation or activation is in progress. Do not upload unknown model files. Upload is chunked but a failed attempt should be restarted as directed by the error.</p>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Model Upload Page]</strong> — show fields, accepted-file control and model list. <strong>Figure A-19. Model management.</strong></p>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Upload Progress]</strong> — show state, percent, uploaded, remaining and chunk progress. <strong>Figure A-20. Model upload progress.</strong></p>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Successful Model Upload]</strong> — show success plus Uploaded (pending validation), Validate and Activate sequence. <strong>Figure A-21. Model upload result.</strong></p>
+<hr>
+<h1 class="">16. Reports and PDF generation</h1>
+<p>Reports answer “What happened on the farm during a selected period?”</p>
+<h2 class="">16.1 Available reports</h2>
+<ul>
+<li>Goat Inventory, Vaccination, Health and Goat Weight;</li>
+<li>Automated Feeder, Automated Door and Automated Lighting;</li>
+<li>Environmental Monitoring (temperature, humidity, indoor light, rain and MQ-135);</li>
+<li>AI Detection Activity;</li>
+<li>Security Monitoring;</li>
+<li>Marketplace.</li>
+</ul>
+<p>Report periods are Today, Last 7 days, Last 30 days, This month and Custom date range. Detailed reports can include report-specific filters, summary cards, charts and a data table. Screen pages show 50 rows per page; exports use the selected data subject to the application’s safety caps.</p>
+<h2 class="">16.2 Generate the combined Farm PDF</h2>
+<p><strong>Navigation path:</strong> Reports → period → Generate Farm PDF</p>
+<ol>
+<li>Choose the reporting period. For Custom, enter start and end dates.</li>
+<li>Select <strong>Apply period</strong> and review the summary/events.</li>
+<li>Select <strong>Generate Farm PDF</strong>.</li>
+<li>In the print-friendly page, use the browser Print command.</li>
+<li>Choose <strong>Save as PDF</strong> or a printer, then save/print.</li>
+</ol>
+<h2 class="">16.3 Generate a detailed PDF or export</h2>
+<p><strong>Navigation path:</strong> Reports → report card → filters → Generate PDF / Print</p>
+<ol>
+<li>Open the required report card.</li>
+<li>Choose filters and select <strong>Apply</strong>.</li>
+<li>Check the period, notes, summaries and source rows.</li>
+<li>Select <strong>CSV</strong>, <strong>Excel</strong>, or <strong>Generate PDF / Print</strong>.</li>
+<li>For PDF, use the browser’s <strong>Save as PDF</strong>. The server does not directly create a PDF file.</li>
+</ol>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Reports Page]</strong> — show period controls, Farm PDF, summary cards, report categories and important events. <strong>Figure A-22. Report Center.</strong></p>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Example PDF Report]</strong> — show the print preview/result with private data removed. <strong>Figure A-23. Farm report PDF.</strong></p>
+<hr>
+<h1 class="">17. Accounts, profile and logout</h1>
+<h2 class="">17.1 User management</h2>
+<p><strong>Navigation path:</strong> Settings → Authentication and Authorization → Users</p>
+<p>Use Django administration to add/edit a user, set Active state, and assign the correct group. Staff status creates Administrator-level portal routing and must be restricted. Passwords must be set through the secure password controls and never recorded in this manual.</p>
+<p>Disabling <strong>Active</strong> blocks sign-in without deleting history. Deleting users may affect audit ownership and must be approved and backed up. The inspected custom portal does not expose a separate profile-edit/password-change page in its navigation; password reset is available from login when configured.</p>
+<h2 class="">17.2 Marketplace user tools</h2>
+<p>Use <strong>Registered Users</strong>, <strong>Seller Applications</strong>, <strong>Support Tickets</strong> and <strong>Manage Marketplace</strong> for marketplace administration. These are separate from farm-role access.</p>
+<h2 class="">17.3 Logout</h2>
+<p>Select <strong>Logout</strong> in the sidebar or user menu. Log out whenever an Administrator leaves a shared device.</p>
+<hr>
+<h1 class="">18. Maintenance and cleaning</h1>
+<h2 class="">18.1 Schedule</h2>
+<table><thead><tr><th>Interval</th><th>Administrator check</th></tr></thead><tbody>
+<tr><td>Daily</td><td>Overview; device freshness; temperature/humidity/feed; camera; high/critical alerts; failed SMS; Daily Summary result</td></tr>
+<tr><td>Weekly</td><td>Visible cables and strain relief; sensor mounts; feed sensor path; camera lens/view; door/feeder mechanism; test one approved notification path</td></tr>
+<tr><td>Monthly</td><td>Enclosures/ventilation; power and network connections; device reliability; storage through approved OS monitoring <strong>[Information Needed: command/threshold]</strong>; backup result <strong>[Information Needed: backup procedure]</strong>; user access review</td></tr>
+<tr><td>After movement/repair</td><td>Recalibrate affected sensor/scale, retest actuator safety and update installation record</td></tr>
+</tbody></table>
+<h2 class="">18.2 Cleaning</h2>
+<ol>
+<li>Schedule downtime if cleaning could touch equipment.</li>
+<li>Shut down/isolate the relevant equipment using the approved procedure.</li>
+<li>Use a clean, dry, lint-free cloth on enclosures.</li>
+<li>Clean the camera lens gently with suitable lens material.</li>
+<li>Remove dry loose debris around ventilation and the ultrasonic path without moving calibration points.</li>
+<li>Do not spray water or chemicals on electronics or sensors.</li>
+<li>Do not open or abrade the DHT21, LDR, MQ-135, rain plate or ultrasonic transducer.</li>
+</ol>
+<hr>
+<h1 class="">19. Troubleshooting</h1>
+<table><thead><tr><th>Problem</th><th>Possible cause</th><th>Recommended action</th></tr></thead><tbody>
+<tr><td>System does not start</td><td>Site power, supply, fuse or Pi fault</td><td>Isolate if unsafe; check approved power path and contact technician. Do not bypass a fuse.</td></tr>
+<tr><td>Web portal unavailable</td><td>Pi/service/network down or wrong address</td><td>Check router/Pi power, correct URL and network; retry from authorized device.</td></tr>
+<tr><td>Login fails</td><td>Wrong credentials, inactive account or role</td><td>Re-enter username/email; reset password; verify Active/group/staff settings.</td></tr>
+<tr><td>Menu missing / Access denied</td><td>Role lacks permission</td><td>Verify group and account role. Do not grant Administrator only to reveal a menu.</td></tr>
+<tr><td>Data not updating</td><td>ESP32/network/sensor stopped</td><td>Check timestamp, Device Status, power/Wi-Fi/API; inspect sensor safely.</td></tr>
+<tr><td>No readings</td><td>No data received</td><td>Treat state as unknown, not normal. Check device/source and recent alerts.</td></tr>
+<tr><td>Temperature/humidity absent</td><td>DHT21 or data connection issue</td><td>Check main controller, DHT power/data/mounting and logs.</td></tr>
+<tr><td>MQ-135 value misleading</td><td>Warm-up/calibration absent</td><td>Use raw trend only; confirm calibrated flag/documentation before PPM.</td></tr>
+<tr><td>Feed value incorrect</td><td>Obstruction, moved sensor or wrong calibration</td><td>Inspect real feed and mount; check distance/percentage; recalibrate empty/full.</td></tr>
+<tr><td>Door/light/feed command queued</td><td>Controller offline</td><td>Restore connection; supervise equipment when it reconnects.</td></tr>
+<tr><td>Command says Sent but nothing moved</td><td>No hardware acknowledgement, power/mechanical issue</td><td>Inspect physical equipment, controller, power and logs; do not repeat feeder blindly.</td></tr>
+<tr><td>Camera unavailable</td><td>Camera power/network/URL/credentials or obstruction</td><td>Check Camera status/error, connections and view; do not expose credentials.</td></tr>
+<tr><td>Detection absent</td><td>Camera/model inactive</td><td>Verify camera stream and active validated model.</td></tr>
+<tr><td>False person event</td><td>Detection error or harmless activity</td><td>Review snapshot/time/source; dismiss with notes if appropriate.</td></tr>
+<tr><td>SMS not received</td><td>Master/type switch, recipient, provider credit/key, worker or cooldown</td><td>Check diagnostics, Logs, Test SMS, balance and scheduler; never expose API key.</td></tr>
+<tr><td>Daily Summary missing</td><td>Disabled, not due, skipped/failed run or scheduler down</td><td>Check Send time, Last attempt/error and Next run; inspect Celery worker/beat.</td></tr>
+<tr><td>Model upload stuck/fails</td><td>Connection, invalid file, storage, order or timeout</td><td>Read message; keep power on; verify file/type/size/storage; restart upload if directed.</td></tr>
+<tr><td>Model cannot activate</td><td>Pending/failed validation or load error</td><td>Validate first; review notes; keep current active model.</td></tr>
+<tr><td>PDF “download” not found</td><td>PDF uses browser print</td><td>Open Generate PDF / Print and choose Save as PDF.</td></tr>
+<tr><td>Report empty</td><td>No records in selected period/filter</td><td>Check period and underlying devices; do not create sample values.</td></tr>
+</tbody></table>
+<p><strong>System unresponsive:</strong> contact the authorized Administrator/technician before removing power unless there is an immediate electrical, fire or animal-safety danger. In an immediate danger, isolate power by the approved emergency method.</p>
+<hr>
+<h1 class="">20. Technical specifications</h1>
+<table><thead><tr><th>Item</th><th>Confirmed specification</th></tr></thead><tbody>
+<tr><td>Main computer</td><td>Raspberry Pi 5</td></tr>
+<tr><td>RAM/storage/OS release</td><td><strong>[Specification to be confirmed from installed unit]</strong></td></tr>
+<tr><td>Server framework</td><td>Django 6.0-compatible project; Daphne/ASGI in production services</td></tr>
+<tr><td>Database</td><td>MySQL production configuration; local development database may differ</td></tr>
+<tr><td>Background services</td><td>Celery worker and Celery Beat; Redis broker/cache/channels in production</td></tr>
+<tr><td>Local time zone</td><td>Asia/Manila</td></tr>
+<tr><td>Controllers</td><td>Two classic ESP32 DevKit / ESP32-WROOM-32 controllers in finalized wiring design; installed boards <strong>[Specification to be confirmed]</strong></td></tr>
+<tr><td>Environmental hardware</td><td>DHT21/AM2301, LDR divider, digital rain sensor, MQ-135 module</td></tr>
+<tr><td>Feed hardware</td><td>Ultrasonic distance sensor and servo; exact models <strong>[Specification to be confirmed]</strong></td></tr>
+<tr><td>Other hardware support</td><td>Door actuator/relay or driver, light relay, load cell/HX711, BLE beacons/receivers, network camera</td></tr>
+<tr><td>Network</td><td>Wi-Fi/API for ESP32; web access through configured HTTP/HTTPS deployment; exact network <strong>[Specification to be confirmed]</strong></td></tr>
+<tr><td>Camera protocols</td><td>Wi-Fi IP camera record; RTSP, HTTP/MJPEG and USB types supported</td></tr>
+<tr><td>ML formats/types</td><td>YOLOv8, RF-DETR, PyTorch, TensorFlow/Keras, YOLO TF/Keras, Roboflow self-hosted/hosted and scikit-learn; upload UI accepts listed weight extensions</td></tr>
+<tr><td>Model upload limit</td><td>500 MB configured maximum; chunked upload and private storage</td></tr>
+<tr><td>Report output</td><td>HTML, CSV, Excel; PDF through browser Print/Save as PDF</td></tr>
+<tr><td>SMS</td><td>Console test backend or Semaphore live backend; PH number normalization</td></tr>
+<tr><td>Sensor reporting/freshness</td><td>Firmware documentation: 30-second environmental reporting; default stale policy: 90 seconds</td></tr>
+<tr><td>Power ratings</td><td><strong>[Specification to be confirmed from installed nameplates and power-distribution record]</strong></td></tr>
+<tr><td>Accuracy/ranges</td><td><strong>[Specification to be confirmed through component datasheets and calibration records]</strong></td></tr>
+</tbody></table>
+<hr>
+<h1 class="">21. Button, icon and status reference</h1>
+<table><thead><tr><th>Control</th><th>Meaning</th></tr></thead><tbody>
+<tr><td>Add / Add Goat / Add schedule / Add rule</td><td>Create the named record</td></tr>
+<tr><td>View Details / Open report</td><td>Open full information</td></tr>
+<tr><td>Save / Save settings / Save Weight</td><td>Store reviewed changes</td></tr>
+<tr><td>Edit</td><td>Change an existing record</td></tr>
+<tr><td>Delete</td><td>Permanently remove the selected supported record; confirm target first</td></tr>
+<tr><td>Pause / Resume</td><td>Disable/enable a schedule without deleting it</td></tr>
+<tr><td>Bell</td><td>Open Security notifications; badge shows unread count</td></tr>
+<tr><td>Menu / More</td><td>Open full navigation on small screens</td></tr>
+<tr><td>Sun/Moon</td><td>Change local display theme</td></tr>
+<tr><td>Filter / Apply</td><td>Apply selected filters/period</td></tr>
+<tr><td>Mark all read</td><td>Change unread state only</td></tr>
+<tr><td>Validate</td><td>Test a stored ML model before activation</td></tr>
+<tr><td>Activate / Deactivate</td><td>Make model current / stop using it</td></tr>
+<tr><td>Generate Farm PDF</td><td>Open combined print view</td></tr>
+<tr><td>Generate PDF / Print</td><td>Open detailed print view</td></tr>
+<tr><td>CSV / Excel</td><td>Download report data</td></tr>
+<tr><td>Logout</td><td>End the authenticated session</td></tr>
+</tbody></table>
+<hr>
+<h1 class="">22. Quick-reference cards, do’s and don’ts, glossary</h1>
+<h2 class="">22.1 Daily checklist</h2>
+<ul>
+<li>[ ] Overview has current controller/camera/model information.</li>
+<li>[ ] Temperature, humidity and feed show current timestamps.</li>
+<li>[ ] Camera view and detection are available when expected.</li>
+<li>[ ] Device Status has no unexplained offline controller.</li>
+<li>[ ] High/critical and unread/unresolved alerts were reviewed.</li>
+<li>[ ] SMS Logs have no unexplained failure.</li>
+<li>[ ] Daily Summary Last attempt/Next run are correct.</li>
+<li>[ ] Door, light and feeder area are physically safe.</li>
+</ul>
+<h2 class="">22.2 Quick troubleshooting card</h2>
+<p><strong>No dashboard?</strong> → Check production address, network, Raspberry Pi and service status. <strong>No sensor data?</strong> → Check timestamp, ESP32 and Device Status. <strong>No feed data?</strong> → Inspect actual feed, ultrasonic sensor and feeder controller. <strong>No camera?</strong> → Check camera power/network/status/error. <strong>No SMS?</strong> → Check master switch, recipient, diagnostics, Logs and provider. <strong>Daily Summary missing?</strong> → Check Last attempt/error and Next run. <strong>Model upload failed?</strong> → Read error; verify file/type/size/storage/network and retry safely. <strong>System unresponsive?</strong> → Use authorized recovery; do not pull power except for immediate safety.</p>
+<h2 class="">22.3 Administrator do’s and don’ts</h2>
+<p><strong>DO:</strong> check device freshness; review failed SMS; use approved model files; verify scheduled summaries; protect accounts; inspect physical results; use safe shutdown.</p>
+<p><strong>DON’T:</strong> share Administrator credentials; upload unknown weights; disconnect during uploads; expose keys/camera passwords; delete records without approval; assume <strong>Sent</strong> means moved; report uncalibrated MQ-135 values as exact PPM.</p>
+<h2 class="">22.4 Glossary</h2>
+<p><strong>Actuator</strong> — Equipment that performs an action, such as door, light or feeder. <strong>Alert</strong> — A notification that may require action. <strong>BLE</strong> — Short-range radio used here for nearby/proximity tracking, not GPS. <strong>Dashboard/Overview</strong> — Main page showing current farm and system information. <strong>Daily Summary</strong> — Scheduled SMS digest of real farm records. <strong>Device freshness</strong> — Whether recent data has been received within the system rule. <strong>ESP32</strong> — Controller that reads sensors or controls equipment. <strong>Feed monitoring</strong> — Ultrasonic distance/percentage used to estimate available feed. <strong>ML model</strong> — Detection model file used to analyze images. <strong>Notification</strong> — Inbox item linked to an event or system message. <strong>PDF report</strong> — Print view saved as PDF using the browser. <strong>Raspberry Pi</strong> — Main GoHMoTech server computer. <strong>Security detection</strong> — Camera record that a person/face category was detected; not identity recognition. <strong>Sent/Queued</strong> — Command delivery state, not proof of physical execution.</p>
+<hr>
+<h1 class="">Appendix A. Photo and screenshot plan</h1>
+<table><thead><tr><th>Figure</th><th>Required image</th><th>Important areas</th></tr></thead><tbody>
+<tr><td>A-1</td><td>Complete system</td><td>All installed subsystems</td></tr>
+<tr><td>A-2</td><td>Raspberry Pi</td><td>Enclosure, power, network, ventilation</td></tr>
+<tr><td>A-3/A-4</td><td>Main unit front/connections</td><td>Labels and safe cable entries</td></tr>
+<tr><td>A-5</td><td>Main ESP32</td><td>Confirmed controller/sensor connections</td></tr>
+<tr><td>A-6</td><td>Feed unit</td><td>Ultrasonic, mount, feed bin, servo, ESP32 2</td></tr>
+<tr><td>A-7</td><td>Camera</td><td>Lens, mount, monitored zone, cable</td></tr>
+<tr><td>A-8</td><td>Administrator Overview</td><td>Navigation, summaries, status, alerts, camera</td></tr>
+<tr><td>A-9</td><td>Powered system</td><td>Actual indicators only</td></tr>
+<tr><td>A-10</td><td>User/group setup</td><td>Non-sensitive user role controls</td></tr>
+<tr><td>A-11</td><td>Login</td><td>Username/email, password, eye, sign-in</td></tr>
+<tr><td>A-12</td><td>Admin navigation</td><td>Exact menu order and top controls</td></tr>
+<tr><td>A-13/A-14</td><td>Goat list/details</td><td>Search/actions; weight/health/photos</td></tr>
+<tr><td>A-15</td><td>Environmental/feed</td><td>Readings, units, timestamps, alerts</td></tr>
+<tr><td>A-16</td><td>Security</td><td>Tabs, filters, notification/detection states</td></tr>
+<tr><td>A-17/A-18</td><td>SMS/Daily Summary</td><td>Toggles, time, diagnostics; redact numbers</td></tr>
+<tr><td>A-19–A-21</td><td>Model upload</td><td>Form, progress, lifecycle result</td></tr>
+<tr><td>A-22/A-23</td><td>Reports/PDF</td><td>Period, report cards, Print/Save as PDF</td></tr>
+</tbody></table>
+<h1 class="">Appendix B. Implementation verification record</h1>
+<p>This draft was checked against the Django URL configuration, role helpers/decorators, shared navigation template, Administrator and owner dashboards, IoT/goat/feed/security/SMS/ML models and views, report registry/templates, deployment configuration, finalized wiring guides and current ESP32 sketches. The development database was queried and contained no registered production devices, actuators or cameras; installation-specific claims are therefore marked for confirmation.</p>
+<p>Deliberate exclusions: no unsupported environmental sensor; no claim that BLE is GPS; no person identity recognition; no fake actuator acknowledgement; no direct server-generated PDF; no invented hardware LEDs, electrical ratings, installed part numbers, URL, startup time or shutdown button.</p>
+<p><strong>End of Administrator User Manual</strong></p></body></html>

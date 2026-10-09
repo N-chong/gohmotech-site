@@ -83,6 +83,7 @@ _data_root = Path(required("PRODUCTION_DATA_ROOT")).resolve()
 MEDIA_ROOT = _data_root / "media"
 STATIC_ROOT = _data_root / "static"
 PRIVATE_SUPPORT_ROOT = _data_root / "private_support"
+PRIVATE_INQUIRY_ROOT = _data_root / "private_inquiries"
 PROTECTED_MODELS_ROOT = _data_root / "protected_models"
 STATIC_URL = "/static/"
 MEDIA_URL = "/media/"

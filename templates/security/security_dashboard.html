@@ -28,6 +28,32 @@
     .notif-row { border-left: 4px solid transparent; }
     .sec-muted { color: var(--text-secondary); font-size: 0.85rem; }
     .detection-thumb { width: 96px; height: 72px; object-fit: cover; border-radius: 8px; }
+    .security-model-file, .security-upload-status {
+        border: 1px solid var(--border-color); border-radius: var(--radius-md);
+        background: var(--card-bg-subtle); padding: .85rem; margin-top: .65rem;
+    }
+    .security-model-file { display: flex; align-items: center; gap: .7rem; }
+    .security-model-file > i { color: var(--primary-600); font-size: 1.4rem; }
+    .security-model-file strong, .security-model-file span { display: block; overflow-wrap: anywhere; }
+    .security-upload-head { display: flex; justify-content: space-between; gap: .75rem; }
+    .security-upload-state { color: var(--primary-700); font-weight: 700; }
+    .security-upload-track {
+        height: 12px; margin: .75rem 0 .55rem; overflow: hidden;
+        border-radius: 999px; background: var(--border-color);
+    }
+    .security-upload-bar {
+        width: 0; height: 100%; background: var(--primary-600);
+        transition: width .15s linear;
+    }
+    .security-upload-bar.is-success { background: var(--success); }
+    .security-upload-bar.is-failed { background: var(--danger); }
+    .security-upload-numbers { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; }
+    .security-upload-numbers span { display: block; }
+    .security-upload-numbers strong { color: var(--text-primary); }
+    @media (max-width: 576px) {
+        .security-upload-head { flex-direction: column; }
+        .security-upload-numbers { grid-template-columns: 1fr; }
+    }
 </style>
 {% endblock %}
 
@@ -170,11 +196,11 @@
                     <thead>
                         <tr>
                             <th>Severity</th><th>Title</th><th>Type</th>
-                            <th>Source</th><th>Date/Time</th><th>State</th><th></th>
+                            <th>Source</th><th>Date/Time</th><th>SMS</th><th>State</th><th></th>
                         </tr>
                     </thead>
                     <tbody id="alertsBody">
-                        <tr><td colspan="7" class="sec-muted">Loading...</td></tr>
+                        <tr><td colspan="8" class="sec-muted">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -261,8 +287,9 @@
                         </select>
                     </div>
                     <div class="col-md-3">
-                        <select class="form-select form-select-sm" name="model_type">
+                        <select class="form-select form-select-sm" name="model_type" id="securityModelType">
                             <option value="yolov8">YOLOv8 (Ultralytics)</option>
+                            <option value="rfdetr">RF-DETR (downloaded checkpoint)</option>
                             <option value="pytorch">PyTorch</option>
                             <option value="tensorflow">TensorFlow/Keras</option>
                             <option value="yolo">YOLO (TF/Keras)</option>
@@ -271,11 +298,52 @@
                             <option value="sklearn">scikit-learn</option>
                         </select>
                     </div>
+                    <div class="col-md-4 d-none" id="securityRfdetrVariantGroup">
+                        <select class="form-select form-select-sm" name="rfdetr_variant" id="securityRfdetrVariant" required>
+                            <option value="" selected disabled>Select the trained model size</option>
+                            <option value="nano">RF-DETR Nano</option>
+                            <option value="small">RF-DETR Small</option>
+                            <option value="medium">RF-DETR Medium</option>
+                            <option value="large">RF-DETR Large</option>
+                        </select>
+                    </div>
                     <div class="col-md-8">
-                        <input class="form-control form-control-sm" type="file" name="model_file" required>
+                        <input class="form-control form-control-sm" id="securityModelFile" type="file"
+                               name="model_file" accept=".pt,.pth,.ckpt,.onnx,.tflite,.h5,.keras" required>
+                        <div class="security-model-file d-none" id="securityModelFileSummary">
+                            <i class="bi bi-file-earmark-binary"></i>
+                            <div>
+                                <strong id="securityModelFileName"></strong>
+                                <span class="sec-muted" id="securityModelFileMeta"></span>
+                            </div>
+                        </div>
                     </div>
                     <div class="col-md-4">
-                        <button class="btn btn-sm btn-primary w-100" type="submit">Upload (inactive)</button>
+                        <button class="btn btn-sm btn-primary w-100" id="securityUploadSubmit" type="submit">
+                            Upload (inactive)
+                        </button>
+                    </div>
+                    <div class="col-12">
+                        <section class="security-upload-status d-none" id="securityUploadStatus" aria-live="polite">
+                            <div class="security-upload-head">
+                                <div>
+                                    <span class="sec-muted">Model Upload</span>
+                                    <strong id="securityUploadFile">No file selected</strong>
+                                </div>
+                                <span class="security-upload-state" id="securityUploadState">Preparing upload</span>
+                            </div>
+                            <div class="security-upload-track" id="securityUploadProgress" role="progressbar"
+                                 aria-label="Model upload progress" aria-valuemin="0" aria-valuemax="100"
+                                 aria-valuenow="0">
+                                <div class="security-upload-bar" id="securityUploadBar"></div>
+                            </div>
+                            <div class="security-upload-numbers">
+                                <span class="sec-muted">Uploaded<strong id="securityUploadedSize">0 B</strong></span>
+                                <span class="sec-muted">Remaining<strong id="securityRemainingSize">0 B</strong></span>
+                                <span class="sec-muted">Progress<strong id="securityUploadPercent">0%</strong></span>
+                            </div>
+                            <p class="sec-muted mb-0 mt-2" id="securityUploadDetail">Preparing the upload request.</p>
+                        </section>
                     </div>
                     <div class="col-12"><small class="sec-muted" id="uploadMsg">
                         Uploaded models are validated before they can be activated. Nothing is auto-activated.
@@ -326,7 +394,7 @@ function esc(s) {
 function fmtDate(iso) {
     if (!iso) return '';
     const d = new Date(iso);
-    return d.toLocaleString('en-US', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+    return d.toLocaleString('en-US', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', timeZone:'Asia/Manila'});
 }
 function sevBadge(sev, label) {
     return `<span class="badge badge-sev-${esc(sev)}">${esc(label || sev)}</span>`;
@@ -354,12 +422,15 @@ function buildAlertsUrl() {
 function loadAlerts(url) {
     alertsUrl = url || buildAlertsUrl();
     fetch(alertsUrl, {headers: {'Accept': 'application/json'}})
-        .then(r => r.json())
+        .then(r => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+        })
         .then(data => {
             const rows = data.results || data;
             const body = document.getElementById('alertsBody');
             if (!rows.length) {
-                body.innerHTML = '<tr><td colspan="7" class="sec-muted">No notifications.</td></tr>';
+                body.innerHTML = '<tr><td colspan="8" class="sec-muted">No notifications recorded yet.</td></tr>';
             } else {
                 body.innerHTML = rows.map(n => {
                     const stateBadges = [];
@@ -379,6 +450,7 @@ function loadAlerts(url) {
                         <td class="sec-muted">${esc(n.type_display)}</td>
                         <td class="sec-muted">${esc(n.source || '-')}</td>
                         <td class="sec-muted">${fmtDate(n.created_at)}</td>
+                        <td class="sec-muted">${n.sms_status ? esc(n.sms_status.display) : 'Not requested'}</td>
                         <td>${stateBadges.join(' ')}</td>
                         <td class="text-nowrap">${openBtn} ${readBtn} ${resolveBtn}</td>
                     </tr>`;
@@ -391,6 +463,11 @@ function loadAlerts(url) {
             prev.disabled = !data.previous; next.disabled = !data.next;
             prev.onclick = () => data.previous && loadAlerts(data.previous);
             next.onclick = () => data.next && loadAlerts(data.next);
+        })
+        .catch(() => {
+            const body = document.getElementById('alertsBody');
+            body.innerHTML = '<tr><td colspan="8" class="text-danger">Unable to retrieve notifications. Please retry.</td></tr>';
+            document.getElementById('alertsCount').textContent = 'Notification subsystem unavailable';
         });
 }
 function markRead(id) { post(NOTIF_API + id + '/mark_read/').then(() => loadAlerts(alertsUrl)).then(refreshBadge); }
@@ -480,13 +557,14 @@ function loadModels() {
             body.innerHTML = rows.map(m => {
                 let actions = '';
                 if (staff) {
-                    if (m.has_file && m.status === 'uploaded')
+                    if (m.has_file && ['uploaded', 'rejected', 'archived'].includes(m.status))
                         actions += `<button class="btn btn-sm btn-outline-info" onclick="modelAction(${m.id},'validate')">Validate</button> `;
-                    if (!m.is_active)
+                    if (!m.is_active && (!m.has_file || ['validated', 'inactive'].includes(m.status)))
                         actions += `<button class="btn btn-sm btn-outline-success" onclick="modelAction(${m.id},'activate')">Activate</button> `;
-                    else
+                    if (m.is_active)
                         actions += `<button class="btn btn-sm btn-outline-warning" onclick="modelAction(${m.id},'deactivate')">Deactivate</button> `;
-                    actions += `<button class="btn btn-sm btn-outline-secondary" onclick="modelAction(${m.id},'archive')">Archive</button>`;
+                    if (m.status !== 'archived')
+                        actions += `<button class="btn btn-sm btn-outline-secondary" onclick="modelAction(${m.id},'archive')">Archive</button>`;
                 }
                 return `<tr>
                     <td>${esc(m.name)}<div class="sec-muted">${esc(m.description || '')}</div></td>
@@ -522,18 +600,179 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const uploadForm = document.getElementById('uploadForm');
     if (uploadForm) {
-        uploadForm.addEventListener('submit', function (e) {
+        const modelType = document.getElementById('securityModelType');
+        const variantGroup = document.getElementById('securityRfdetrVariantGroup');
+        const fileInput = document.getElementById('securityModelFile');
+        const fileSummary = document.getElementById('securityModelFileSummary');
+        const fileName = document.getElementById('securityModelFileName');
+        const fileMeta = document.getElementById('securityModelFileMeta');
+        const submitButton = document.getElementById('securityUploadSubmit');
+        const message = document.getElementById('uploadMsg');
+        const statusPanel = document.getElementById('securityUploadStatus');
+        const statusFile = document.getElementById('securityUploadFile');
+        const uploadState = document.getElementById('securityUploadState');
+        const progress = document.getElementById('securityUploadProgress');
+        const progressBar = document.getElementById('securityUploadBar');
+        const uploadedSize = document.getElementById('securityUploadedSize');
+        const remainingSize = document.getElementById('securityRemainingSize');
+        const uploadPercent = document.getElementById('securityUploadPercent');
+        const uploadDetail = document.getElementById('securityUploadDetail');
+        let uploadInProgress = false;
+        let lastUploadedBytes = 0;
+
+        const formatBytes = bytes => {
+            if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+            const digits = index === 0 ? 0 : 1;
+            return `${(bytes / Math.pow(1024, index)).toFixed(digits)} ${units[index]}`;
+        };
+        const setProgress = (uploaded, total) => {
+            const safeTotal = Math.max(total || 0, 0);
+            const safeUploaded = Math.min(Math.max(uploaded || 0, 0), safeTotal || uploaded || 0);
+            const percent = safeTotal ? Math.min(100, Math.round((safeUploaded / safeTotal) * 100)) : 0;
+            lastUploadedBytes = safeUploaded;
+            progressBar.style.width = `${percent}%`;
+            progress.setAttribute('aria-valuenow', String(percent));
+            uploadedSize.textContent = formatBytes(safeUploaded);
+            remainingSize.textContent = formatBytes(Math.max(safeTotal - safeUploaded, 0));
+            uploadPercent.textContent = `${percent}%`;
+        };
+        const setState = (state, detail, kind = 'working') => {
+            uploadState.textContent = state;
+            uploadDetail.textContent = detail;
+            progressBar.classList.toggle('is-success', kind === 'success');
+            progressBar.classList.toggle('is-failed', kind === 'failed');
+        };
+        const setControlsDisabled = disabled => {
+            Array.from(uploadForm.elements).forEach(control => { control.disabled = disabled; });
+            submitButton.disabled = disabled;
+        };
+        const parseJson = text => {
+            try { return JSON.parse(text || '{}'); } catch (_error) { return {}; }
+        };
+        const uploadError = (status, data) => {
+            if (data && data.error) return data.error;
+            if (status === 413) return 'The file is larger than the server upload limit.';
+            if (status === 408 || status === 504) return 'The upload timed out before processing completed.';
+            if (status === 507) return 'The server does not have enough storage for this model.';
+            if (status >= 500) return 'The server could not process the upload.';
+            return 'The upload was rejected. Check the selected file and model details.';
+        };
+        const updateVariantVisibility = () => {
+            const isRfdetr = modelType.value === 'rfdetr';
+            variantGroup.classList.toggle('d-none', !isRfdetr);
+            document.getElementById('securityRfdetrVariant').required = isRfdetr;
+        };
+        modelType.addEventListener('change', updateVariantVisibility);
+        updateVariantVisibility();
+
+        fileInput.addEventListener('change', () => {
+            if (uploadInProgress) return;
+            const file = fileInput.files[0];
+            statusPanel.classList.add('d-none');
+            progressBar.classList.remove('is-success', 'is-failed');
+            setProgress(0, file ? file.size : 0);
+            if (!file) {
+                fileSummary.classList.add('d-none');
+                return;
+            }
+            const extension = file.name.includes('.') ? file.name.split('.').pop().toUpperCase() : 'Unknown';
+            fileName.textContent = file.name;
+            fileMeta.textContent = `${formatBytes(file.size)} · ${file.type || `${extension} model weights`}`;
+            fileSummary.classList.remove('d-none');
+        });
+
+        uploadForm.addEventListener('submit', async function (e) {
             e.preventDefault();
+            if (uploadInProgress || !uploadForm.reportValidity()) return;
+            const file = fileInput.files[0];
+            if (!file) return;
+
             const fd = new FormData(uploadForm);
-            document.getElementById('uploadMsg').textContent = 'Uploading...';
-            fetch(MODEL_API + 'upload/', {method: 'POST', headers: {'X-CSRFToken': CSRF}, body: fd})
-                .then(r => r.json().then(d => ({ok: r.ok, d})))
-                .then(({ok, d}) => {
-                    document.getElementById('uploadMsg').textContent = ok
-                        ? 'Uploaded (inactive). Validate it before activating.'
-                        : (d.error || 'Upload failed');
-                    if (ok) { uploadForm.reset(); loadModels(); }
+            uploadInProgress = true;
+            setControlsDisabled(true);
+            statusPanel.classList.remove('d-none');
+            statusFile.textContent = `${file.name} — ${formatBytes(file.size)}`;
+            setProgress(0, file.size);
+            setState('Preparing upload', 'Checking file limits and available server storage.');
+            message.textContent = 'Preparing upload…';
+
+            try {
+                const preflight = await fetch(MODEL_API + 'upload-session/', {
+                    method: 'POST',
+                    headers: {'X-CSRFToken': CSRF, 'Content-Type': 'application/json'},
+                    body: JSON.stringify({filename: file.name, size: file.size}),
                 });
+                const preflightData = parseJson(await preflight.text());
+                if (!preflight.ok) throw new Error(uploadError(preflight.status, preflightData));
+
+                setState('Uploading', 'Transferring the model file to GoHMoTech in secure chunks.');
+                message.textContent = 'Uploading…';
+                const chunkSize = preflightData.chunk_size;
+                const totalChunks = preflightData.total_chunks;
+                for (let index = 0; index < totalChunks; index += 1) {
+                    const start = index * chunkSize;
+                    const end = Math.min(start + chunkSize, file.size);
+                    const chunkData = new FormData();
+                    chunkData.append('upload_id', preflightData.upload_id);
+                    chunkData.append('chunk_index', String(index));
+                    chunkData.append('chunk', file.slice(start, end), `${file.name}.part`);
+                    await new Promise((resolve, reject) => {
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('POST', MODEL_API + 'upload-chunk/');
+                        xhr.setRequestHeader('X-CSRFToken', CSRF);
+                        xhr.timeout = 5 * 60 * 1000;
+                        xhr.upload.addEventListener('progress', event => {
+                            if (!event.lengthComputable) return;
+                            const chunkBytes = Math.min(end - start, Math.round((event.loaded / event.total) * (end - start)));
+                            const uploaded = Math.min(file.size, start + chunkBytes);
+                            setProgress(uploaded, file.size);
+                            setState('Uploading', `${formatBytes(uploaded)} of ${formatBytes(file.size)} uploaded · chunk ${index + 1} of ${totalChunks}.`);
+                        });
+                        xhr.addEventListener('load', () => {
+                            const data = parseJson(xhr.responseText);
+                            if (xhr.status >= 200 && xhr.status < 300) {
+                                setProgress(end, file.size);
+                                resolve(data);
+                            } else reject(new Error(uploadError(xhr.status, data)));
+                        });
+                        xhr.addEventListener('error', () => reject(new Error('Connection interrupted. Retry to upload from the beginning.')));
+                        xhr.addEventListener('timeout', () => reject(new Error('Upload timed out. Retry to upload from the beginning.')));
+                        xhr.addEventListener('abort', () => reject(new Error('Upload cancelled. Retry to upload from the beginning.')));
+                        xhr.send(chunkData);
+                    });
+                }
+
+                setProgress(file.size, file.size);
+                setState('Upload complete', 'All chunks arrived. The server is validating and storing the assembled model.');
+                const completionData = Object.fromEntries(fd.entries());
+                delete completionData.model_file;
+                completionData.upload_id = preflightData.upload_id;
+                const completion = await fetch(MODEL_API + 'complete-upload/', {
+                    method: 'POST',
+                    headers: {'X-CSRFToken': CSRF, 'Content-Type': 'application/json'},
+                    body: JSON.stringify(completionData),
+                });
+                const result = parseJson(await completion.text());
+                if (!completion.ok) throw new Error(uploadError(completion.status, result));
+
+                setProgress(file.size, file.size);
+                const activeText = result.is_active ? 'Active' : 'Inactive — validate it before activation';
+                setState('Upload successful', `${file.name} was stored successfully. Status: ${activeText}.`, 'success');
+                message.textContent = 'Model uploaded successfully. Validate it before activating.';
+                uploadForm.reset();
+                fileSummary.classList.add('d-none');
+                updateVariantVisibility();
+                loadModels();
+            } catch (error) {
+                const percent = file.size ? Math.min(100, Math.round((lastUploadedBytes / file.size) * 100)) : 0;
+                setState('Upload failed', `Upload failed at ${percent}%. ${error.message}`, 'failed');
+                message.textContent = error.message;
+            } finally {
+                uploadInProgress = false;
+                setControlsDisabled(false);
+            }
         });
     }
 });

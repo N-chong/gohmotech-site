@@ -16,7 +16,7 @@ if env_path.exists():
 
 development = dotenv_values(project / '.env')
 data_root = Path('/home/gohmotech/.local/share/gohmotech-beta')
-for directory in ('media', 'static', 'private_support', 'protected_models', 'releases'):
+for directory in ('media', 'static', 'private_support', 'private_inquiries', 'protected_models', 'releases'):
     (data_root / directory).mkdir(parents=True, exist_ok=True, mode=0o700)
 
 values = {

@@ -567,13 +567,9 @@
                                                 <span class="badge badge-info ms-2">{{ schedule.display_action }}</span>
                                                 <small class="text-tertiary ms-2">{{ schedule.display_days }}</small>
                                             </div>
-                                            <div class="d-flex gap-1">
-                                                <button class="btn btn-sm btn-outline" onclick="toggleSchedule({{ schedule.id }})" title="{% if schedule.is_active %}Pause{% else %}Resume{% endif %}">
-                                                    <i class="bi bi-{{ schedule.is_active|yesno:'pause,play' }}"></i>
-                                                </button>
-                                                <button class="btn btn-sm btn-outline text-danger" onclick="deleteSchedule({{ schedule.id }})" title="Delete">
-                                                    <i class="bi bi-trash"></i>
-                                                </button>
+                                            <div class="d-flex gap-1 align-items-center">
+                                                <button class="btn btn-sm btn-outline" onclick="toggleSchedule({{ schedule.id }})"><i class="bi bi-{{ schedule.is_active|yesno:'pause,play' }}"></i> {% if schedule.is_active %}Pause{% else %}Resume{% endif %}</button>
+                                                <div class="dropdown"><button class="btn btn-sm btn-outline dropdown-toggle" data-bs-toggle="dropdown" aria-label="More schedule actions">More</button><ul class="dropdown-menu dropdown-menu-end"><li><button class="dropdown-item text-danger" onclick="deleteSchedule({{ schedule.id }})"><i class="bi bi-trash me-2"></i>Delete schedule</button></li></ul></div>
                                             </div>
                                         </div>
                                     </div>
@@ -597,13 +593,9 @@
                                                 <span class="badge badge-warning ms-2">{{ schedule.display_action }}</span>
                                                 <small class="text-tertiary ms-2">{{ schedule.display_days }}</small>
                                             </div>
-                                            <div class="d-flex gap-1">
-                                                <button class="btn btn-sm btn-outline" onclick="toggleSchedule({{ schedule.id }})" title="{% if schedule.is_active %}Pause{% else %}Resume{% endif %}">
-                                                    <i class="bi bi-{{ schedule.is_active|yesno:'pause,play' }}"></i>
-                                                </button>
-                                                <button class="btn btn-sm btn-outline text-danger" onclick="deleteSchedule({{ schedule.id }})" title="Delete">
-                                                    <i class="bi bi-trash"></i>
-                                                </button>
+                                            <div class="d-flex gap-1 align-items-center">
+                                                <button class="btn btn-sm btn-outline" onclick="toggleSchedule({{ schedule.id }})"><i class="bi bi-{{ schedule.is_active|yesno:'pause,play' }}"></i> {% if schedule.is_active %}Pause{% else %}Resume{% endif %}</button>
+                                                <div class="dropdown"><button class="btn btn-sm btn-outline dropdown-toggle" data-bs-toggle="dropdown" aria-label="More schedule actions">More</button><ul class="dropdown-menu dropdown-menu-end"><li><button class="dropdown-item text-danger" onclick="deleteSchedule({{ schedule.id }})"><i class="bi bi-trash me-2"></i>Delete schedule</button></li></ul></div>
                                             </div>
                                         </div>
                                     </div>
@@ -627,13 +619,9 @@
                                                 <span class="badge badge-success ms-2">Dispense feed</span>
                                                 {% if schedule.days_of_week %}<small class="text-tertiary ms-2">{{ schedule.get_days_display }}</small>{% endif %}
                                             </div>
-                                            <div class="d-flex gap-1">
-                                                <button class="btn btn-sm btn-outline" onclick="toggleFeedSchedule({{ schedule.id }})" title="{% if schedule.is_active %}Pause{% else %}Resume{% endif %}">
-                                                    <i class="bi bi-{{ schedule.is_active|yesno:'pause,play' }}"></i>
-                                                </button>
-                                                <button class="btn btn-sm btn-outline text-danger" onclick="deleteFeedSchedule({{ schedule.id }})" title="Delete">
-                                                    <i class="bi bi-trash"></i>
-                                                </button>
+                                            <div class="d-flex gap-1 align-items-center">
+                                                <button class="btn btn-sm btn-outline" onclick="toggleFeedSchedule({{ schedule.id }})"><i class="bi bi-{{ schedule.is_active|yesno:'pause,play' }}"></i> {% if schedule.is_active %}Pause{% else %}Resume{% endif %}</button>
+                                                <div class="dropdown"><button class="btn btn-sm btn-outline dropdown-toggle" data-bs-toggle="dropdown" aria-label="More feeding schedule actions">More</button><ul class="dropdown-menu dropdown-menu-end"><li><button class="dropdown-item text-danger" onclick="deleteFeedSchedule({{ schedule.id }})"><i class="bi bi-trash me-2"></i>Delete schedule</button></li></ul></div>
                                             </div>
                                         </div>
                                     </div>
@@ -669,13 +657,9 @@
                                             <small class="text-tertiary">{{ rule.condition_display }}</small><br>
                                             <span class="badge badge-success mt-1">{{ rule.get_action_display }}</span>
                                         </div>
-                                        <div class="d-flex gap-1">
-                                            <button class="btn btn-sm btn-outline" onclick="toggleRule({{ rule.id }})" title="{% if rule.is_active %}Pause{% else %}Resume{% endif %}">
-                                                <i class="bi bi-{{ rule.is_active|yesno:'pause,play' }}"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-outline text-danger" onclick="deleteRule({{ rule.id }})" title="Delete">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
+                                        <div class="d-flex gap-1 align-items-center">
+                                            <button class="btn btn-sm btn-outline" onclick="toggleRule({{ rule.id }})"><i class="bi bi-{{ rule.is_active|yesno:'pause,play' }}"></i> {% if rule.is_active %}Pause{% else %}Resume{% endif %}</button>
+                                            <div class="dropdown"><button class="btn btn-sm btn-outline dropdown-toggle" data-bs-toggle="dropdown" aria-label="More rule actions">More</button><ul class="dropdown-menu dropdown-menu-end"><li><button class="dropdown-item text-danger" onclick="deleteRule({{ rule.id }})"><i class="bi bi-trash me-2"></i>Delete rule</button></li></ul></div>
                                         </div>
                                     </div>
                                 </div>

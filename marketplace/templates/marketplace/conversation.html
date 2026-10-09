@@ -1,35 +1,97 @@
-{% extends "marketplace/buyer_base.html" %}
+{% extends "marketplace/buyer_base.html" %}{% load static %}
 {% block title %}Conversation about {{ conversation.listing.goat.goat_id }} | GoHMoTech{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'marketplace/messaging.css' %}?v=20261009-5">
+<style>
+@media(max-width:900px){
+  .messenger-page{height:calc(var(--messenger-viewport-height,100dvh) - 70px)}
+  .messenger-shell.keyboard-open .chat-context,.messenger-shell.keyboard-open .conversation-toolbar{display:none}
+  .messenger-shell.keyboard-open .chat-header{min-height:48px;padding-block:5px}
+}
+@media(max-width:900px) and (max-height:600px){
+  .chat-context,.conversation-toolbar{display:none}
+  .chat-header{min-height:48px;padding-block:5px}
+  .messenger-shell .message-thread{min-height:120px}
+}
+</style>
+{% endblock %}
 {% block content %}
-<section class="buyer-page"><div class="store-container">
+<section class="messenger-page"><div class="messenger-wrap">
   {% include "marketplace/_messages.html" %}
-  <nav class="breadcrumb"><a href="{% url inbox_name %}">{% if viewer_is_seller %}Seller messages{% elif user.is_staff %}Marketplace inquiries{% else %}My inquiries{% endif %}</a><i class="bi bi-chevron-right"></i><span>Goat {{ conversation.listing.goat.goat_id }}</span></nav>
-  <div class="message-layout">
-    <div class="message-card">
-      <header class="conversation-header">
-        <div><span class="section-kicker">{% if user.is_staff %}Moderation view{% else %}Private conversation{% endif %}</span><h1>Goat {{ conversation.listing.goat.goat_id }}</h1><p class="conversation-participants"><i class="bi bi-person"></i> {{ conversation.buyer.get_full_name|default:conversation.buyer.username }} <i class="bi bi-arrow-left-right"></i> {{ conversation.listing.seller.seller_profile.farm_name|default:conversation.listing.seller.get_full_name|default:conversation.listing.seller.username }}</p></div>
-        <div class="conversation-badges"><span class="conversation-status conversation-status-{{ conversation.status }}">{{ conversation.get_status_display }}</span><span class="availability availability-{{ conversation.listing.status }}"><i class="bi bi-circle-fill"></i> {{ conversation.listing.get_status_display }}</span></div>
+  <div class="messenger-shell{% if user.is_staff %} messenger-shell-moderator{% endif %}">
+    {% if not user.is_staff %}{% include "marketplace/_conversation_list.html" with seller_mode=messenger_seller_view inbox_title="Messages" inbox_eyebrow="Marketplace inbox" %}{% endif %}
+    <section class="chat-panel" aria-label="Conversation about {{ conversation.listing.goat.goat_id }}">
+      <header class="chat-header">
+        <a class="chat-mobile-back" href="{% url inbox_name %}" aria-label="Back to conversations"><i class="bi bi-chevron-left"></i><span>Chats</span></a>
+        <span class="chat-person-avatar">{% if messenger_seller_view %}{{ conversation.buyer.first_name|default:conversation.buyer.username|first|upper }}{% if conversation.buyer.last_name %}{{ conversation.buyer.last_name|first|upper }}{% endif %}{% else %}{{ conversation.listing.seller.first_name|default:conversation.listing.seller.username|first|upper }}{% endif %}</span>
+        <div class="chat-header-person"><h1>{% if messenger_seller_view %}{{ conversation.buyer.get_full_name|default:conversation.buyer.username }}{% else %}{{ conversation.listing.seller.seller_profile.farm_name|default:conversation.listing.seller.get_full_name|default:conversation.listing.seller.username }}{% endif %}</h1><p><span class="context-dot"></span> Inquiry about {{ conversation.listing.goat.name|default:conversation.listing.goat.get_breed_display }}</p></div>
+        <div class="chat-header-actions"><span class="conversation-status conversation-status-{{ conversation.status }}">{{ conversation.get_status_display }}</span>{% if viewer_is_buyer or viewer_is_seller %}<a class="messenger-icon-link" href="{% url 'marketplace:support_ticket_create' %}?conversation={{ conversation.pk }}" aria-label="Contact support" title="Contact support"><i class="bi bi-headset"></i></a>{% endif %}</div>
       </header>
-      {% if user.is_staff and not viewer_is_buyer and not viewer_is_seller %}<div class="conversation-notice"><i class="bi bi-shield-lock"></i><span><strong>Read-only moderation view.</strong> Administrators can review or close this conversation but cannot message as the buyer or seller.</span></div>{% endif %}
-      {% if conversation.status == 'closed' %}<div class="conversation-notice conversation-notice-closed"><i class="bi bi-lock"></i><span>This conversation is closed. Reopen it to continue messaging.</span></div>{% endif %}
-      <div class="message-thread" aria-live="polite">
-        {% for item in conversation_messages %}<article class="message-bubble {% if item.sender_id == user.id %}mine{% endif %}"><strong>{% if item.sender_id == conversation.buyer_id %}Buyer{% else %}Seller{% endif %} · {{ item.sender.get_full_name|default:item.sender.username }}</strong><div>{{ item.body|linebreaksbr }}</div><small>{{ item.created_at|date:"M j, Y · g:i A" }}</small></article>
-        {% empty %}<p class="empty-thread">No messages yet. Ask a clear question about the goat, price, or pickup.</p>{% endfor %}
+
+      <div class="chat-context">
+      <div class="chat-listing-card">
+        <div class="chat-listing-image">{% if conversation.listing.display_image %}<img src="{{ conversation.listing.display_image.image.url }}" alt="{{ conversation.listing.goat.name|default:conversation.listing.goat.goat_id }}" loading="lazy">{% else %}<i class="bi bi-image"></i>{% endif %}</div>
+        <div class="chat-listing-copy"><span>Goat listing · {{ conversation.listing.goat.goat_id }}</span><strong>{{ conversation.listing.goat.name|default:conversation.listing.goat.get_breed_display }}</strong><small>{{ conversation.listing.goat.get_breed_display }} · PHP {{ conversation.listing.price|floatformat:2 }}</small></div>
+        <span class="listing-state listing-state-{{ conversation.listing.status }}"><i class="bi bi-circle-fill"></i> {{ conversation.listing.get_status_display }}</span>
+        <a class="chat-listing-link" href="{% url 'marketplace:detail' conversation.listing.pk %}">View listing <i class="bi bi-box-arrow-up-right"></i></a>
       </div>
-      {% if can_message %}<form method="post" class="message-compose">{% csrf_token %}{{ form.non_field_errors }}{{ form.body.errors }}{{ form.body }}<div class="compose-actions"><small>Private to this buyer and seller · maximum 2,000 characters</small><button class="button button-primary">Send message <i class="bi bi-send"></i></button></div></form>{% endif %}
+
+      {% if user.is_staff and not viewer_is_buyer and not viewer_is_seller %}<div class="chat-notice"><i class="bi bi-shield-lock"></i><span><strong>Read-only moderation view.</strong> Administrators can review or close this conversation but cannot message as the buyer or seller.</span></div>{% endif %}
+      {% if conversation.status == 'closed' %}<div class="chat-notice chat-notice-muted"><i class="bi bi-lock"></i><span>This conversation is closed. Reopen it to continue messaging.</span></div>{% endif %}
+
+      {% if viewer_is_buyer or viewer_is_seller %}<details class="transaction-context"{% if active_reservation %} open{% endif %}><summary><span><i class="bi bi-receipt"></i> Transaction details</span><span>{% if active_reservation %}{{ active_reservation.get_status_display }}{% else %}No reservation yet{% endif %} <i class="bi bi-chevron-down"></i></span></summary><div class="transaction-context-body">
+        {% if viewer_is_buyer %}
+          {% if active_reservation %}<div><strong>{{ active_reservation.get_status_display }}</strong><p>{% if active_reservation.status == 'pending' %}Waiting for the seller to review your reservation request.{% else %}{{ active_reservation.get_pickup_status_display }}{% if active_reservation.pickup_datetime %} · {{ active_reservation.pickup_datetime|date:"M j, Y · g:i A" }}{% endif %}{% endif %}</p></div>{% if active_reservation.status == 'pending' %}<a class="button button-ghost button-small" href="{% url 'marketplace:buyer_reservations' %}">View request</a>{% else %}<a class="button button-primary button-small" href="{% url 'marketplace:pickup' active_reservation.pk %}">Request / change pickup</a>{% endif %}
+          {% elif conversation.listing.status == 'available' %}<div><strong>Interested in this goat?</strong><p>The goat is reserved only after the seller accepts. Payment remains manual at pickup.</p></div><form method="post" action="{% url 'marketplace:confirm_purchase' conversation.pk %}">{% csrf_token %}<button class="button button-primary button-small" onclick="return confirm('Request this goat at PHP {{ conversation.listing.price }}?')">Request reservation</button></form>
+          {% else %}<div><strong>{{ conversation.listing.get_status_display }}</strong><p>This listing is not currently accepting reservation requests.</p></div>{% endif %}
+        {% elif viewer_is_seller %}
+          <div><strong>{% if active_reservation %}{{ active_reservation.get_status_display }}{% else %}No active request{% endif %}</strong><p>{% if active_reservation %}Manage this buyer's existing reservation without leaving its conversation context.{% else %}Continue the conversation until the buyer is ready to request a reservation.{% endif %}</p></div>{% if active_reservation %}<a class="button button-primary button-small" href="{% url 'marketplace:seller_reservations' %}">Manage reservation</a>{% endif %}
+        {% endif %}
+      </div></details>{% endif %}
+      </div>
+
+      <div class="message-thread" aria-live="polite" aria-label="Message history" data-message-thread>
+        {% for item in conversation_messages %}<div class="message-row{% if item.sender_id == user.id %} mine{% endif %}" data-message-row data-sender="{{ item.sender_id }}">
+          {% if item.sender_id != user.id %}<span class="message-avatar" aria-hidden="true">{{ item.sender.first_name|default:item.sender.username|first|upper }}</span>{% endif %}
+          <article class="message-bubble{% if item.sender_id == user.id %} mine{% endif %}">
+            {% ifchanged item.sender_id %}<strong class="message-sender">{% if item.sender_id == conversation.buyer_id %}{{ conversation.buyer.get_full_name|default:conversation.buyer.username }}{% else %}{{ conversation.listing.seller.seller_profile.farm_name|default:item.sender.get_full_name|default:item.sender.username }}{% endif %}</strong>{% endifchanged %}
+            {% if item.image_attachment %}<button class="message-image-button" type="button" data-inquiry-image="{% url 'marketplace:inquiry_image' item.pk %}" data-image-name="{{ item.image_original_name|default:'Inquiry image' }}" aria-label="Open {{ item.image_original_name|default:'attached image' }} in a larger preview"><span class="message-image-loading"><i class="bi bi-arrow-repeat"></i></span><img class="message-image" src="{% url 'marketplace:inquiry_image' item.pk %}" alt="Image attached by {{ item.sender.get_full_name|default:item.sender.username }}" loading="lazy"></button>{% endif %}
+            {% if item.body %}<div class="message-body">{{ item.body|linebreaksbr }}</div>{% endif %}
+            <time datetime="{{ item.created_at|date:'c' }}">{{ item.created_at|date:"g:i A" }}{% if item.sender_id == user.id %} <i class="bi bi-check2-all" aria-label="Sent"></i>{% endif %}</time>
+          </article>
+        </div>{% empty %}<div class="empty-thread"><i class="bi bi-chat-dots"></i><strong>Start the conversation</strong><p>Ask a clear question about the goat, price, health, or pickup.</p></div>{% endfor %}
+      </div>
+
+      {% if can_message %}<form method="post" enctype="multipart/form-data" class="message-compose" data-message-form>{% csrf_token %}<div class="compose-errors" role="alert">{{ form.non_field_errors }}{{ form.body.errors }}{{ form.image_attachment.errors }}</div><div class="image-attachment-preview" data-image-preview hidden><img alt="Selected image preview" data-preview-image><div><strong data-preview-name></strong><small>JPG, PNG, or WebP · maximum 5 MB</small></div><button type="button" class="remove-image" data-remove-image aria-label="Remove selected image"><i class="bi bi-x-lg"></i></button></div><div class="compose-bar"><label class="attach-image-button" for="{{ form.image_attachment.id_for_label }}" title="Attach image"><i class="bi bi-paperclip"></i><span>Attach image</span></label>{{ form.image_attachment }}{{ form.body }}<button class="send-message-button" type="submit" data-send-button aria-label="Send message"><i class="bi bi-send-fill"></i><span>Send</span></button></div><small class="compose-status" data-upload-status>Images are private to this conversation · 2,000 character limit</small><span class="messenger-sr-only" aria-hidden="true">Uploading image…</span></form>{% endif %}
+
       <div class="conversation-toolbar"><form method="post" action="{% url 'marketplace:conversation_status' conversation.pk %}">{% csrf_token %}{% if conversation.status == 'open' %}<input type="hidden" name="action" value="close"><button class="text-action" type="submit"><i class="bi bi-lock"></i> Close conversation</button>{% else %}<input type="hidden" name="action" value="reopen"><button class="text-action" type="submit"><i class="bi bi-unlock"></i> Reopen conversation</button>{% endif %}</form></div>
-    </div>
-    <aside class="reservation-card">
-      <span class="detail-tag">Listing summary</span><h2>{{ conversation.listing.goat.name|default:conversation.listing.goat.get_breed_display }}</h2><div class="detail-price">PHP {{ conversation.listing.price|floatformat:2 }}</div>
-      <div class="conversation-seller"><i class="bi bi-shop"></i><div><small>Approved seller</small><strong>{{ conversation.listing.seller.seller_profile.farm_name|default:conversation.listing.seller.get_full_name|default:conversation.listing.seller.username }}</strong>{% if conversation.listing.seller.seller_profile.public_location %}<span><i class="bi bi-geo-alt"></i> {{ conversation.listing.seller.seller_profile.public_location }}</span>{% endif %}</div></div>
-      <a class="button button-ghost detail-action" href="{% url 'marketplace:detail' conversation.listing.pk %}">View goat details</a>
-      {% if viewer_is_buyer or viewer_is_seller %}<a class="button button-ghost detail-action" style="margin-top:10px" href="{% url 'marketplace:support_ticket_create' %}?conversation={{ conversation.pk }}"><i class="bi bi-headset"></i> Contact Support</a>{% endif %}
-      {% if viewer_is_buyer %}
-        {% if active_reservation %}<div class="reservation-section"><span class="section-kicker">Reservation</span><p><strong>{{ active_reservation.get_status_display }}</strong></p>{% if active_reservation.status == 'pending' %}<p>The seller has not accepted yet. This goat remains available until one request is accepted.</p><a class="button button-primary detail-action" href="{% url 'marketplace:buyer_reservations' %}">View request</a>{% else %}<p><strong>{{ active_reservation.get_pickup_status_display }}</strong></p>{% if active_reservation.pickup_datetime %}<div class="pickup-note"><i class="bi bi-calendar-check"></i> {{ active_reservation.pickup_datetime|date:"M j, Y · g:i A" }}</div>{% endif %}<a class="button button-primary detail-action" href="{% url 'marketplace:pickup' active_reservation.pk %}">Request / change pickup</a>{% endif %}</div>
-        {% elif conversation.listing.status == 'available' %}<div class="reservation-section"><p>Ready to proceed? Send a request for the seller to review.</p><form method="post" action="{% url 'marketplace:confirm_purchase' conversation.pk %}">{% csrf_token %}<button class="button button-primary detail-action" onclick="return confirm('Request this goat at PHP {{ conversation.listing.price }}?')">Request reservation</button></form><small>The goat becomes reserved only after seller acceptance. Payment remains manual at pickup.</small></div>
-        {% elif conversation.listing.status == 'reserved' %}<div class="alert alert-warning reservation-section">This goat is currently reserved.</div>{% endif %}
-      {% elif viewer_is_seller and active_reservation %}<div class="reservation-section"><span class="section-kicker">Reservation context</span><p>{{ active_reservation.get_status_display }} for this buyer.</p><a class="button button-primary detail-action" href="{% url 'marketplace:seller_reservations' %}">Manage reservation</a></div>{% endif %}
-    </aside>
+    </section>
   </div>
 </div></section>
+<dialog class="inquiry-image-viewer" data-image-viewer aria-label="Attached image preview"><button type="button" class="image-viewer-close" data-image-viewer-close aria-label="Close image preview"><i class="bi bi-x-lg"></i></button><img src="" alt="" data-viewer-image><p data-viewer-name></p></dialog>
+{% endblock %}
+{% block scripts %}
+<script src="{% static 'marketplace/messaging.js' %}?v=20261009-2" defer></script>
+<script>
+(() => {
+  const shell = document.querySelector('.messenger-shell');
+  const viewport = window.visualViewport;
+  let largestHeight = 0;
+  const syncConversationViewport = () => {
+    const height = viewport ? Math.min(viewport.height, window.innerHeight) : window.innerHeight;
+    largestHeight = Math.max(largestHeight, height);
+    document.documentElement.style.setProperty('--messenger-viewport-height', `${height}px`);
+    if (shell) shell.classList.toggle('keyboard-open', largestHeight - height > 120);
+  };
+  syncConversationViewport();
+  if (viewport) {
+    viewport.addEventListener('resize', syncConversationViewport);
+    viewport.addEventListener('scroll', syncConversationViewport);
+  } else {
+    window.addEventListener('resize', syncConversationViewport);
+  }
+  const composer = document.querySelector('[data-message-form] textarea');
+  if (composer) composer.addEventListener('focus', () => window.setTimeout(syncConversationViewport, 250));
+})();
+</script>
 {% endblock %}

@@ -13,12 +13,13 @@ only concerns itself with the file itself.
 
 import os
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 
 # Known model-weight extensions. This is an ALLOW-LIST — anything not here is
 # rejected, which is what blocks arbitrary executables (.exe, .sh, .bat, .py...).
 ALLOWED_MODEL_EXTENSIONS = {
-    '.pt', '.pth',        # PyTorch / YOLO
+    '.pt', '.pth', '.ckpt',  # PyTorch / YOLO / RF-DETR Lightning
     '.h5', '.keras',      # Keras / TensorFlow
     '.pb',                # TensorFlow SavedModel graph
     '.onnx',              # ONNX
@@ -34,7 +35,9 @@ BLOCKED_EXTENSIONS = {
     '.com', '.scr', '.ps1', '.vbs',
 }
 
-MAX_MODEL_FILE_SIZE = 500 * 1024 * 1024  # 500 MB
+MAX_MODEL_FILE_SIZE = getattr(
+    settings, 'MODEL_UPLOAD_MAX_FILE_SIZE', 500 * 1024 * 1024
+)
 MIN_MODEL_FILE_SIZE = 1                   # reject empty files
 
 

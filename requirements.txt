@@ -35,6 +35,7 @@ bleak>=3.0,<4.0
 # tensorflow>=2.15.0          # For TensorFlow/Keras models (.h5, .keras)
 torch>=2.1.0                  # For PyTorch models (.pt, .pth) - Required for YOLOv8
 ultralytics>=8.0.0            # YOLOv8 for goat detection
+rfdetr>=1.9.3,<2.0            # RF-DETR uploaded checkpoint inference
 scikit-learn>=1.4.0           # For scikit-learn models (.pkl, .joblib)
 opencv-python>=4.9.0          # Image processing
 numpy>=1.26.0                 # Array operations

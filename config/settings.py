@@ -100,6 +100,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'allauth.account.middleware.AccountMiddleware',
+    'dashboard.middleware.SystemAuditMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'marketplace.middleware.FarmRoleAccessMiddleware',
     'marketplace.middleware.MarketplaceBuyerAccessMiddleware',
@@ -175,7 +176,8 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-# Set timezone to Philippines (fixes ESP32 time sync issue)
+# Store aware instants in UTC; Django uses this zone only for local display and
+# schedule interpretation. Device firmware must submit explicit UTC/offset time.
 TIME_ZONE = 'Asia/Manila'
 
 # Use timezone-aware datetimes
@@ -188,9 +190,15 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Goat camera captures are submitted as base64 form fields. Keep Django's form
-# parser aligned with the authenticated upload limit enforced by nginx.
-DATA_UPLOAD_MAX_MEMORY_SIZE = 12 * 1024 * 1024
+# Most requests remain capped at 12 MB by nginx. The staff-only model upload
+# route has a dedicated 512 MB proxy limit so it can accept the validator's
+# 500 MB maximum plus multipart overhead. Django may parse that request, while
+# FILE_UPLOAD_MAX_MEMORY_SIZE ensures large model files are spooled to a
+# TemporaryUploadedFile instead of being retained in Raspberry Pi memory.
+MODEL_UPLOAD_MAX_FILE_SIZE = 500 * 1024 * 1024
+MODEL_UPLOAD_FREE_SPACE_RESERVE = 256 * 1024 * 1024
+DATA_UPLOAD_MAX_MEMORY_SIZE = 512 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 2_621_440
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
@@ -201,6 +209,9 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # through the development media route. Downloads always pass through an
 # authenticated, ticket-scoped view.
 PRIVATE_SUPPORT_ROOT = BASE_DIR / 'private_support_uploads'
+# Inquiry images are outside public media and are only returned by a
+# participant-authorized marketplace view.
+PRIVATE_INQUIRY_ROOT = BASE_DIR / 'private_inquiry_uploads'
 
 # Authentication Configuration
 LOGIN_URL = '/accounts/login/'

@@ -7,13 +7,18 @@ from marketplace.decorators import farm_access_required, farm_owner_required, st
 from marketplace.permissions import FarmRolePermission, IsAdmin, IsFarmOwnerOrAdmin
 from django.shortcuts import render
 from django.utils import timezone
-from django.db import models
+from django.db import IntegrityError, models
 from django.conf import settings
+from django.core.files import File
 from datetime import timedelta
+from types import SimpleNamespace
 import numpy as np
 import base64
+import json
 import os
+import shutil
 import tempfile
+import uuid
 from pathlib import Path
 try:
     import cv2
@@ -52,6 +57,81 @@ _detectors = {}
 
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
 VIDEO_EXTENSIONS = {'.mp4', '.mov', '.avi', '.mkv', '.webm'}
+
+
+def _model_storage_has_capacity(file_size):
+    """Return whether protected storage has room for a model plus a reserve."""
+    storage = MLModel._meta.get_field('model_file').storage
+    location = Path(storage.location)
+    probe = location
+    while not probe.exists() and probe != probe.parent:
+        probe = probe.parent
+    try:
+        free_bytes = shutil.disk_usage(probe).free
+    except OSError:
+        logger.exception("Unable to inspect protected model storage capacity")
+        return False
+    reserve = getattr(settings, 'MODEL_UPLOAD_FREE_SPACE_RESERVE', 256 * 1024 * 1024)
+    return free_bytes >= int(file_size) + int(reserve)
+
+
+def _delete_stored_model_file(model):
+    """Best-effort cleanup when storage succeeded but registration did not."""
+    if not model.model_file or not model.model_file.name:
+        return
+    try:
+        model.model_file.storage.delete(model.model_file.name)
+    except Exception:
+        logger.exception("Could not clean up failed model upload %s", model.model_file.name)
+
+
+MODEL_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024
+MODEL_UPLOAD_SESSION_MAX_AGE = timedelta(hours=24)
+
+
+def _upload_staging_root():
+    """Return private, same-filesystem staging storage for chunked uploads."""
+    storage = MLModel._meta.get_field('model_file').storage
+    root = Path(storage.location) / '.upload_staging'
+    root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    return root
+
+
+def _upload_session_directory(upload_id):
+    """Resolve an opaque UUID without allowing traversal outside staging."""
+    canonical = str(uuid.UUID(str(upload_id)))
+    return _upload_staging_root() / canonical
+
+
+def _read_upload_session(upload_id, user):
+    directory = _upload_session_directory(upload_id)
+    metadata_path = directory / 'session.json'
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
+    except (OSError, ValueError, TypeError) as exc:
+        raise ValueError('This upload session is missing or expired.') from exc
+    if metadata.get('user_id') != user.pk:
+        raise PermissionError('This upload session belongs to another user.')
+    return directory, metadata
+
+
+def _write_upload_session(directory, metadata):
+    metadata_path = directory / 'session.json'
+    temporary_path = directory / 'session.json.tmp'
+    temporary_path.write_text(json.dumps(metadata), encoding='utf-8')
+    temporary_path.replace(metadata_path)
+
+
+def _cleanup_expired_upload_sessions():
+    """Best-effort removal of abandoned staging files older than 24 hours."""
+    root = _upload_staging_root()
+    cutoff = timezone.now().timestamp() - MODEL_UPLOAD_SESSION_MAX_AGE.total_seconds()
+    for directory in root.iterdir():
+        try:
+            if directory.is_dir() and directory.stat().st_mtime < cutoff:
+                shutil.rmtree(directory)
+        except OSError:
+            logger.warning("Could not remove expired model upload session %s", directory)
 
 
 def _is_within_media_root(path_obj: Path) -> bool:
@@ -453,41 +533,96 @@ class MLModelViewSet(viewsets.ModelViewSet):
             instance.status = 'archived'
             instance.save(update_fields=['is_active', 'status'])
 
-    @action(detail=False, methods=['post'])
-    def upload(self, request):
-        """
-        Securely register a new model from an uploaded file.
+    @action(detail=False, methods=['post'], url_path='upload-preflight')
+    def upload_preflight(self, request):
+        """Reject invalid or unsupportable uploads before transferring bytes."""
+        from django.core.exceptions import ValidationError
+        from .validators import MAX_MODEL_FILE_SIZE, validate_model_upload
 
-        Validates type/size, blocks executables and path traversal, stores the
-        file privately, records metadata separately, and leaves the model
-        INACTIVE with status 'uploaded' — it is never auto-activated.
-        """
+        filename = str(request.data.get('filename') or '')
+        try:
+            file_size = int(request.data.get('size') or 0)
+        except (TypeError, ValueError):
+            return Response(
+                {'error': 'The selected file size is invalid.', 'error_code': 'invalid_file'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            validate_model_upload(SimpleNamespace(name=filename, size=file_size))
+        except ValidationError as exc:
+            return Response(
+                {'error': '; '.join(exc.messages), 'error_code': 'invalid_file'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not _model_storage_has_capacity(file_size):
+            return Response(
+                {
+                    'error': 'Server storage does not have enough free space for this model.',
+                    'error_code': 'storage_unavailable',
+                },
+                status=507,
+            )
+        return Response({'ready': True, 'file_size': file_size,
+                         'max_file_size': MAX_MODEL_FILE_SIZE})
+
+    def _register_uploaded_model(self, uploaded, data, user):
+        """Validate, privately store, and register a received model file."""
         from django.core.exceptions import ValidationError
         from .validators import validate_model_upload
-
-        uploaded = request.FILES.get('model_file') or request.FILES.get('file')
-        if not uploaded:
-            return Response({'error': 'No model_file provided.'},
-                            status=status.HTTP_400_BAD_REQUEST)
 
         try:
             facts = validate_model_upload(uploaded)
         except ValidationError as exc:
-            return Response({'error': '; '.join(exc.messages)},
+            return Response({'error': '; '.join(exc.messages),
+                             'error_code': 'invalid_file'},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        name = request.data.get('name')
-        version = request.data.get('version', '1.0')
+        if not _model_storage_has_capacity(facts['size']):
+            return Response(
+                {
+                    'error': 'Server storage does not have enough free space for this model.',
+                    'error_code': 'storage_unavailable',
+                },
+                status=507,
+            )
+
+        name = data.get('name')
+        version = data.get('version', '1.0')
         if not name:
-            return Response({'error': 'Model name is required.'},
+            return Response({'error': 'Model name is required.', 'error_code': 'invalid_request'},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        category = request.data.get('category', 'other')
-        model_type = request.data.get('model_type', 'yolov8')
+        category = data.get('category', 'other')
+        model_type = data.get('model_type', 'yolov8')
+
+        valid_categories = {value for value, _label in MLModel.CATEGORY_CHOICES}
+        valid_model_types = {value for value, _label in MLModel.MODEL_TYPES}
+        if category not in valid_categories:
+            return Response({'error': 'Unsupported model category.', 'error_code': 'invalid_request'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if model_type not in valid_model_types:
+            return Response({'error': 'Unsupported model type.', 'error_code': 'invalid_request'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if model_type == 'rfdetr' and facts['extension'] not in {'.pt', '.pth', '.ckpt'}:
+            return Response(
+                {'error': 'RF-DETR uploads must be .pt, .pth, or .ckpt checkpoints.',
+                 'error_code': 'invalid_file'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        metadata = None
+        if model_type == 'rfdetr':
+            rfdetr_variant = data.get('rfdetr_variant', 'nano').lower()
+            if rfdetr_variant not in {'auto', 'nano', 'small', 'medium', 'large'}:
+                return Response({'error': 'Unsupported RF-DETR model size.',
+                                 'error_code': 'invalid_request'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            metadata = {'rfdetr': {'variant': rfdetr_variant}}
 
         if MLModel.objects.filter(name=name, version=version).exists():
             return Response(
-                {'error': f"A model named '{name}' version '{version}' already exists."},
+                {'error': f"A model named '{name}' version '{version}' already exists.",
+                 'error_code': 'duplicate_model'},
                 status=status.HTTP_400_BAD_REQUEST)
 
         model = MLModel(
@@ -495,24 +630,225 @@ class MLModelViewSet(viewsets.ModelViewSet):
             version=version,
             category=category,
             model_type=model_type,
-            description=request.data.get('description', ''),
-            uploaded_by=request.user,
+            description=data.get('description', ''),
+            metadata=metadata,
+            uploaded_by=user,
             file_size=facts['size'],
             status='uploaded',
             is_active=False,  # never auto-activate
         )
-        # Store under the validated (sanitized) basename.
-        model.model_file.save(facts['safe_name'], uploaded, save=False)
-        model.save()
+        # Store under the validated basename. Large uploads arrive as
+        # TemporaryUploadedFile objects, so FileSystemStorage moves/copies them
+        # in chunks rather than reading the entire checkpoint into Python RAM.
+        try:
+            model.model_file.save(facts['safe_name'], uploaded, save=False)
+            storage = model.model_file.storage
+            if (
+                not storage.exists(model.model_file.name)
+                or storage.size(model.model_file.name) != facts['size']
+            ):
+                raise OSError('Stored model size does not match the received upload.')
+            model.save()
+        except IntegrityError:
+            _delete_stored_model_file(model)
+            logger.warning("Duplicate model registration raced with upload: %s v%s", name, version)
+            return Response(
+                {
+                    'error': f"A model named '{name}' version '{version}' already exists.",
+                    'error_code': 'duplicate_model',
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        except OSError:
+            _delete_stored_model_file(model)
+            logger.exception("Model upload could not be stored or registered")
+            return Response(
+                {
+                    'error': 'The server could not store the uploaded model. '
+                             'The existing active model was not changed.',
+                    'error_code': 'storage_unavailable',
+                },
+                status=507,
+            )
+        except Exception:
+            _delete_stored_model_file(model)
+            logger.exception("Unexpected error while registering model upload")
+            return Response(
+                {
+                    'error': 'The server could not register the uploaded model. '
+                             'The existing active model was not changed.',
+                    'error_code': 'server_error',
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         serializer = self.get_serializer(model)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+    @action(detail=False, methods=['post'])
+    def upload(self, request):
+        """
+        Securely register a model received in one request.
+
+        This endpoint remains available for API compatibility and smaller
+        files. Browser uploads use the chunked endpoints below so requests can
+        safely pass through proxies with lower per-request limits.
+        """
+        uploaded = request.FILES.get('model_file') or request.FILES.get('file')
+        if not uploaded:
+            return Response({'error': 'Choose a model weights file to upload.',
+                             'error_code': 'invalid_file'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        return self._register_uploaded_model(uploaded, request.data, request.user)
+
+    @action(detail=False, methods=['post'], url_path='upload-session')
+    def upload_session(self, request):
+        """Create an opaque private staging session for a chunked upload."""
+        preflight = self.upload_preflight(request)
+        if preflight.status_code != status.HTTP_200_OK:
+            return preflight
+
+        from django.core.exceptions import ValidationError
+        from .validators import validate_model_upload
+
+        try:
+            facts = validate_model_upload(SimpleNamespace(
+                name=str(request.data.get('filename') or ''),
+                size=int(request.data.get('size') or 0),
+            ))
+        except (ValidationError, TypeError, ValueError) as exc:
+            messages = getattr(exc, 'messages', [str(exc)])
+            return Response({'error': '; '.join(messages), 'error_code': 'invalid_file'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        _cleanup_expired_upload_sessions()
+        upload_id = str(uuid.uuid4())
+        directory = _upload_session_directory(upload_id)
+        directory.mkdir(mode=0o700)
+        metadata = {
+            'upload_id': upload_id,
+            'user_id': request.user.pk,
+            'safe_name': facts['safe_name'],
+            'size': facts['size'],
+            'chunk_size': MODEL_UPLOAD_CHUNK_SIZE,
+            'total_chunks': (facts['size'] + MODEL_UPLOAD_CHUNK_SIZE - 1) // MODEL_UPLOAD_CHUNK_SIZE,
+            'next_index': 0,
+            'received': 0,
+            'created_at': timezone.now().isoformat(),
+        }
+        _write_upload_session(directory, metadata)
+        return Response({
+            'ready': True,
+            'upload_id': upload_id,
+            'file_size': facts['size'],
+            'chunk_size': MODEL_UPLOAD_CHUNK_SIZE,
+            'total_chunks': metadata['total_chunks'],
+        })
+
+    @action(detail=False, methods=['post'], url_path='upload-chunk')
+    def upload_chunk(self, request):
+        """Append one verified, sequential chunk to private staging storage."""
+        upload_id = request.data.get('upload_id')
+        chunk = request.FILES.get('chunk')
+        try:
+            chunk_index = int(request.data.get('chunk_index'))
+            directory, metadata = _read_upload_session(upload_id, request.user)
+        except PermissionError as exc:
+            return Response({'error': str(exc), 'error_code': 'forbidden'},
+                            status=status.HTTP_403_FORBIDDEN)
+        except (TypeError, ValueError) as exc:
+            return Response({'error': str(exc) or 'Invalid upload session.',
+                             'error_code': 'invalid_session'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        if not chunk:
+            return Response({'error': 'No upload chunk was received.',
+                             'error_code': 'invalid_chunk'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if chunk_index != metadata['next_index']:
+            return Response({
+                'error': 'Upload chunks arrived out of order. Retry the upload from the beginning.',
+                'error_code': 'invalid_chunk_order',
+            }, status=status.HTTP_409_CONFLICT)
+
+        remaining = metadata['size'] - metadata['received']
+        expected_size = min(metadata['chunk_size'], remaining)
+        if chunk.size != expected_size:
+            return Response({
+                'error': 'The received upload chunk has an unexpected size.',
+                'error_code': 'invalid_chunk',
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        part_path = directory / 'model.part'
+        original_size = part_path.stat().st_size if part_path.exists() else 0
+        if original_size != metadata['received']:
+            return Response({
+                'error': 'The staged upload is inconsistent. Retry from the beginning.',
+                'error_code': 'invalid_session',
+            }, status=status.HTTP_409_CONFLICT)
+        try:
+            with part_path.open('ab') as destination:
+                for piece in chunk.chunks():
+                    destination.write(piece)
+            metadata['received'] += chunk.size
+            metadata['next_index'] += 1
+            _write_upload_session(directory, metadata)
+        except OSError:
+            try:
+                with part_path.open('r+b') as destination:
+                    destination.truncate(original_size)
+            except OSError:
+                pass
+            logger.exception('Could not store chunk %s for upload %s', chunk_index, upload_id)
+            return Response({'error': 'The server could not store this upload chunk.',
+                             'error_code': 'storage_unavailable'}, status=507)
+
+        return Response({
+            'received': metadata['received'],
+            'next_index': metadata['next_index'],
+            'complete': metadata['received'] == metadata['size'],
+        })
+
+    @action(detail=False, methods=['post'], url_path='complete-upload')
+    def complete_upload(self, request):
+        """Validate and register a completely assembled staged model."""
+        try:
+            directory, metadata = _read_upload_session(
+                request.data.get('upload_id'), request.user
+            )
+        except PermissionError as exc:
+            return Response({'error': str(exc), 'error_code': 'forbidden'},
+                            status=status.HTTP_403_FORBIDDEN)
+        except (TypeError, ValueError) as exc:
+            return Response({'error': str(exc) or 'Invalid upload session.',
+                             'error_code': 'invalid_session'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        part_path = directory / 'model.part'
+        if (
+            metadata['received'] != metadata['size']
+            or metadata['next_index'] != metadata['total_chunks']
+            or not part_path.is_file()
+            or part_path.stat().st_size != metadata['size']
+        ):
+            return Response({
+                'error': 'The model upload is incomplete. Retry from the beginning.',
+                'error_code': 'incomplete_upload',
+            }, status=status.HTTP_409_CONFLICT)
+
+        try:
+            with part_path.open('rb') as source:
+                uploaded = File(source, name=metadata['safe_name'])
+                response = self._register_uploaded_model(uploaded, request.data, request.user)
+        finally:
+            shutil.rmtree(directory, ignore_errors=True)
+        return response
+
     @action(detail=True, methods=['post'], url_path='validate')
     def validate_model(self, request, pk=None):
         """
-        Re-run static validation on a stored model file and mark it 'validated'.
-        A model must be validated before it can be activated.
+        Re-run file checks, load the detector candidate, and mark it validated.
+        A model must pass this step before it can be activated.
         """
         from django.core.exceptions import ValidationError
         from .validators import validate_model_upload
@@ -523,6 +859,11 @@ class MLModelViewSet(viewsets.ModelViewSet):
                             status=status.HTTP_400_BAD_REQUEST)
         try:
             validate_model_upload(model.model_file)
+        except OSError:
+            return Response(
+                {'error': 'The stored model file is missing or unavailable. Restore the weights file or upload it again.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except ValidationError as exc:
             model.status = 'rejected'
             model.validation_notes = '; '.join(exc.messages)
@@ -530,8 +871,28 @@ class MLModelViewSet(viewsets.ModelViewSet):
             return Response({'error': model.validation_notes},
                             status=status.HTTP_400_BAD_REQUEST)
 
+        try:
+            get_detector(
+                model_type=model.model_type,
+                model_path=model.effective_path,
+                confidence_threshold=getattr(settings, 'CONFIDENCE_THRESHOLD', 0.5),
+                use_gpu=getattr(settings, 'USE_GPU', False),
+                metadata=model.metadata or {},
+            )
+        except Exception:
+            logger.exception("Uploaded model load validation failed")
+            model.status = 'rejected'
+            model.validation_notes = (
+                'The checkpoint passed file checks but could not be loaded by '
+                'the configured detector.'
+            )
+            model.save(update_fields=['status', 'validation_notes'])
+            return Response(
+                {'error': model.validation_notes}, status=status.HTTP_400_BAD_REQUEST
+            )
+
         model.status = 'validated'
-        model.validation_notes = 'Passed automatic validation.'
+        model.validation_notes = 'Passed file checks and detector load validation.'
         model.save(update_fields=['status', 'validation_notes'])
         return Response(self.get_serializer(model).data)
 
@@ -552,13 +913,40 @@ class MLModelViewSet(viewsets.ModelViewSet):
                 {'error': 'Model must be validated before activation.'},
                 status=status.HTTP_400_BAD_REQUEST)
 
+        # Load every newly uploaded local candidate before changing the active
+        # record. A corrupt or incompatible checkpoint must never take the
+        # currently working detector offline.
+        candidate_detector = None
+        if model.model_file:
+            try:
+                candidate_detector = get_detector(
+                    model_type=model.model_type,
+                    model_path=model.effective_path,
+                    confidence_threshold=getattr(settings, 'CONFIDENCE_THRESHOLD', 0.5),
+                    use_gpu=getattr(settings, 'USE_GPU', False),
+                    metadata=model.metadata or {},
+                )
+            except Exception:
+                logger.exception("Candidate model activation validation failed")
+                return Response(
+                    {
+                        'error': 'The uploaded model could not be loaded. The previous '
+                                 'active model remains available.'
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         MLModel.objects.filter(category=model.category, is_active=True)\
             .exclude(pk=model.pk).update(is_active=False, status='inactive')
         model.is_active = True
         model.status = 'active'
         model.save(update_fields=['is_active', 'status', 'updated_at'])
 
-        _reset_detector_cache(model.category)  # force reload for this category
+        if candidate_detector is None:
+            _reset_detector_cache(model.category)  # force reload for this category
+        else:
+            key = (model.id, model.updated_at.timestamp())
+            _detectors[model.category] = {'key': key, 'detector': candidate_detector}
         return Response({'status': 'Model activated', 'id': model.id})
 
     @action(detail=True, methods=['post'])
@@ -1018,6 +1406,8 @@ def model_management_view(request):
     return render(request, 'ml_models/model_management.html', {
         'models': models,
         'active_model': active_model,
+        'model_type_choices': MLModel.MODEL_TYPES,
+        'category_choices': MLModel.CATEGORY_CHOICES,
         'page_title': 'ML Model Management'
     })
 

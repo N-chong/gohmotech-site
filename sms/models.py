@@ -164,6 +164,13 @@ class SmsRegistration(models.Model):
         default=True,
         help_text="Allow this number to be used by account-related SMS features.",
     )
+    receives_farm_alerts = models.BooleanField(
+        default=False,
+        help_text=(
+            "Administrator-managed permission to receive farm alert SMS. "
+            "Account owners cannot enable this themselves."
+        ),
+    )
     registered_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -199,6 +206,7 @@ class SmsLog(models.Model):
 
     STATUS_CHOICES = [
         ('pending', 'Pending'),
+        ('sending', 'Sending'),
         ('sent', 'Sent'),
         ('failed', 'Failed'),
     ]
@@ -256,6 +264,13 @@ class SmsLog(models.Model):
             self.save(update_fields=['status', 'sent_at', 'provider',
                                      'provider_message_id', 'api_response'])
 
+    def mark_sending(self, provider='', save=True):
+        self.status = 'sending'
+        if provider:
+            self.provider = provider
+        if save:
+            self.save(update_fields=['status', 'provider'])
+
     def mark_failed(self, error='', api_response=None, provider='', save=True):
         self.status = 'failed'
         if error:
@@ -267,3 +282,40 @@ class SmsLog(models.Model):
         if save:
             self.save(update_fields=['status', 'error_message', 'provider',
                                      'api_response'])
+
+
+class DailySummaryRun(models.Model):
+    """Durable, once-per-local-day audit record for the scheduled digest.
+
+    ``scheduled_date`` is interpreted in Asia/Manila. Its unique constraint is
+    the final duplicate barrier when Beat ticks overlap or a worker restarts.
+    A run is never retried automatically after reaching a terminal state: an
+    ambiguous provider timeout must not result in a duplicate SMS.
+    """
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('sent', 'Sent'),
+        ('failed', 'Failed'),
+        ('skipped', 'Skipped'),
+    ]
+
+    scheduled_date = models.DateField(unique=True)
+    scheduled_for = models.DateTimeField(db_index=True)
+    executed_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
+    recipient = models.CharField(max_length=20, blank=True)
+    error_message = models.TextField(blank=True)
+    sms_log = models.OneToOneField(
+        SmsLog, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='daily_summary_run')
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-scheduled_date']
+
+    def __str__(self):
+        return f"Daily Summary {self.scheduled_date}: {self.get_status_display()}"

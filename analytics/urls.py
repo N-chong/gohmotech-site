@@ -16,6 +16,7 @@ urlpatterns = [
 
     # Report Center (landing page)
     path('', views.report_center_view, name='dashboard'),
+    path('farm-report/print/', views.farm_report_print_view, name='farm_report_print'),
 ]
 
 # One set of routes per report type, generated from the registry so the URL

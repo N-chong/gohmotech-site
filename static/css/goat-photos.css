@@ -104,7 +104,7 @@ html.photo-verification-open body { overflow: hidden; overscroll-behavior: none;
 .comparison-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .comparison-photo { border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 1rem; background: var(--card-bg); }
 .comparison-photo-frame { aspect-ratio: 4 / 3; border-radius: var(--radius-md); overflow: hidden; background: var(--card-bg-subtle); display: grid; place-items: center; color: var(--text-tertiary); }
-.comparison-photo-frame img { width: 100%; height: 100%; object-fit: cover; }
+.comparison-photo-frame img { width: 100%; height: 100%; object-fit: contain; object-position: center; }
 
 @media (max-width: 640px) {
     .goat-photo-section { padding: .875rem; margin-inline: -.25rem; }

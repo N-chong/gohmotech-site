@@ -304,10 +304,67 @@ class CommunityGoatForm(forms.ModelForm):
 
 
 class MessageForm(forms.ModelForm):
+    # FileField lets the size guard run before Pillow attempts to decode a very
+    # large upload. The clean method below still performs full image validation.
+    image_attachment = forms.FileField(
+        required=False,
+        widget=forms.ClearableFileInput(
+            attrs={
+                "accept": "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp",
+                "class": "message-image-input",
+            }
+        ),
+    )
+
     class Meta:
         model = Message
-        fields = ("body",)
-        widgets = {"body": forms.Textarea(attrs={"rows": 3, "maxlength": 2000, "placeholder": "Write a message...", "class": "form-control"})}
+        fields = ("body", "image_attachment")
+        widgets = {
+            "body": forms.Textarea(attrs={"rows": 3, "maxlength": 2000, "placeholder": "Write a message...", "class": "form-control"}),
+        }
+
+    def clean_body(self):
+        return self.cleaned_data.get("body", "").strip()
+
+    def clean_image_attachment(self):
+        upload = self.cleaned_data.get("image_attachment")
+        if not upload:
+            return upload
+        if upload.size > 5 * 1024 * 1024:
+            raise ValidationError("Image is too large. Please select a smaller image.")
+
+        extension = os.path.splitext(upload.name)[1].lower()
+        allowed_types = {
+            ".jpg": {"image/jpeg"},
+            ".jpeg": {"image/jpeg"},
+            ".png": {"image/png"},
+            ".webp": {"image/webp"},
+        }
+        content_type = (getattr(upload, "content_type", "") or "").lower()
+        if extension not in allowed_types or content_type not in allowed_types[extension]:
+            raise ValidationError("Select a valid JPG, PNG, or WebP image.")
+
+        try:
+            upload.seek(0)
+            image = Image.open(upload)
+            image.verify()
+            if image.format not in {"JPEG", "PNG", "WEBP"}:
+                raise ValidationError("Select a valid JPG, PNG, or WebP image.")
+            upload.seek(0)
+            image = Image.open(upload)
+            if image.width * image.height > 25_000_000:
+                raise ValidationError("Please select an image smaller than 25 megapixels.")
+        except (OSError, ValueError, Image.DecompressionBombError):
+            raise ValidationError("The selected image could not be verified.")
+        finally:
+            upload.seek(0)
+        return upload
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if not cleaned_data.get("body") and not cleaned_data.get("image_attachment"):
+            raise ValidationError("Enter a message or attach an image.")
+        return cleaned_data
 
 
 class MarketplaceReportForm(forms.ModelForm):

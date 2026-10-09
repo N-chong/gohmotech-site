@@ -17,7 +17,7 @@ class FarmRoleAccessMiddleware:
         "/analytics/", "/feeding/", "/iot/", "/ml/", "/security/", "/sms/",
     )
     ADMIN_ONLY_PREFIXES = (
-        "/admin/", "/sms/", "/marketplace/manage/", "/iot/devices/",
+        "/admin/", "/sms/", "/marketplace/manage/",
         "/iot/camera/test/", "/ml/models/",
         "/ml/detection/test/", "/ml/recognition/test/", "/ml/detection/diagnostics/",
     )

@@ -412,6 +412,124 @@ class YOLOv8Detector(BaseDetector):
             }
 
 
+class RFDETRDetector(BaseDetector):
+    """RF-DETR object detector backed by an uploaded training checkpoint.
+
+    The selected Nano/Small/etc. variant supplies the architecture for training
+    checkpoints that do not record a model name. Checkpoints are loaded in
+    RF-DETR's safe mode; unsafe pickle fallback is deliberately never enabled
+    for uploaded files.
+    """
+
+    def __init__(self, model_path: str, confidence_threshold: float = 0.5,
+                 use_gpu: bool = False, **_unused):
+        super().__init__(model_path, confidence_threshold)
+
+        try:
+            import torch
+            from rfdetr import (
+                RFDETR, RFDETRNano, RFDETRSmall, RFDETRMedium, RFDETRLarge,
+            )
+        except ImportError as exc:
+            raise ImportError(
+                "RF-DETR support is not installed. Install project requirements "
+                "with: pip install rfdetr"
+            ) from exc
+
+        device = 'cuda' if use_gpu and torch.cuda.is_available() else 'cpu'
+        if use_gpu and device == 'cpu':
+            logger.warning("GPU requested for RF-DETR but CUDA is unavailable; using CPU")
+
+        metadata = _unused.get('metadata') or {}
+        rfdetr_metadata = metadata.get('rfdetr', metadata)
+        variant = str(rfdetr_metadata.get('variant', 'nano')).lower()
+        variants = {
+            'nano': RFDETRNano,
+            'small': RFDETRSmall,
+            'medium': RFDETRMedium,
+            'large': RFDETRLarge,
+        }
+
+        try:
+            if variant == 'auto':
+                self.model = RFDETR.from_checkpoint(
+                    str(model_path), device=device, trust_checkpoint=False,
+                )
+            else:
+                model_class = variants.get(variant)
+                if model_class is None:
+                    raise ValueError(f"Unsupported RF-DETR variant: {variant}")
+                self.model = model_class(
+                    pretrain_weights=str(model_path),
+                    device=device,
+                    trust_checkpoint=False,
+                )
+        except Exception as exc:
+            raise ValueError(
+                f"Unable to load this RF-DETR {variant} checkpoint safely. Check "
+                "that the selected variant matches the downloaded weights and "
+                "upload an original .pth, .pt, or .ckpt checkpoint."
+            ) from exc
+
+        self.device = device
+        self.class_names = list(getattr(self.model, 'class_names', []) or [])
+        logger.info("RF-DETR model loaded: %s on %s", model_path, device)
+
+    def detect(self, image: np.ndarray) -> Dict:
+        """Run RF-DETR inference and normalize results for the existing pipeline."""
+        if image is None or not isinstance(image, np.ndarray):
+            raise ValueError("RF-DETR expects an OpenCV image array.")
+
+        try:
+            from PIL import Image
+
+            # OpenCV frames are BGR; RF-DETR's PIL input path expects RGB.
+            rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            predictions = self.model.predict(
+                Image.fromarray(rgb), threshold=self.confidence_threshold
+            )
+
+            detections = []
+            xyxy_values = getattr(predictions, 'xyxy', [])
+            confidence_values = getattr(predictions, 'confidence', [])
+            class_values = getattr(predictions, 'class_id', [])
+
+            for box, confidence, class_id in zip(
+                    xyxy_values, confidence_values, class_values):
+                x1, y1, x2, y2 = [float(value) for value in box]
+                class_id = int(class_id)
+                label = (self.class_names[class_id]
+                         if 0 <= class_id < len(self.class_names)
+                         else str(class_id))
+                detections.append({
+                    'bbox': {
+                        'x': x1,
+                        'y': y1,
+                        'width': max(0.0, x2 - x1),
+                        'height': max(0.0, y2 - y1),
+                    },
+                    'confidence': float(confidence),
+                    'class': class_id,
+                    'label': label,
+                })
+
+            return {
+                'count': len(detections),
+                'detections': detections,
+                'confidence': max(
+                    (item['confidence'] for item in detections), default=0.0
+                ),
+            }
+        except Exception as exc:
+            logger.error("RF-DETR detection failed: %s", exc)
+            return {
+                'count': 0,
+                'detections': [],
+                'confidence': 0.0,
+                'error': str(exc),
+            }
+
+
 class RoboflowInferenceDetector(BaseDetector):
     """
     Roboflow Inference (self-hosted) detector.
@@ -678,7 +796,7 @@ def get_detector(model_type: str, model_path: str, **kwargs) -> BaseDetector:
     Factory function to get appropriate detector.
     
     Args:
-        model_type: 'tensorflow', 'pytorch', 'yolov8', or 'sklearn'
+        model_type: 'tensorflow', 'pytorch', 'yolov8', or 'rfdetr'
         model_path: Path to model file
         **kwargs: Additional arguments for detector
         
@@ -689,6 +807,8 @@ def get_detector(model_type: str, model_path: str, **kwargs) -> BaseDetector:
     
     if model_type in ['yolov8', 'ultralytics']:
         return YOLOv8Detector(model_path, **kwargs)
+    elif model_type in ['rfdetr', 'rf-detr', 'rf_detr']:
+        return RFDETRDetector(model_path, **kwargs)
     elif model_type in ['roboflow', 'roboflow-inference', 'roboflow_inference']:
         return RoboflowInferenceDetector(model_path, **kwargs)
     elif model_type in ['roboflow-hosted', 'roboflow_hosted', 'roboflow_api']:

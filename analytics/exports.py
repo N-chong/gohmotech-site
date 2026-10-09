@@ -15,11 +15,19 @@ is required.
 import csv
 
 from django.http import HttpResponse
+from django.utils import timezone
 from django.utils.text import slugify
 
 
+def _local_generated_at(data):
+    value = data["generated_at"]
+    if timezone.is_naive(value):
+        value = timezone.make_aware(value, timezone.get_default_timezone())
+    return timezone.localtime(value)
+
+
 def _filename(data, ext):
-    stamp = data["generated_at"].strftime("%Y%m%d-%H%M")
+    stamp = _local_generated_at(data).strftime("%Y%m%d-%H%M")
     return f"{slugify(data['title'])}-{stamp}.{ext}"
 
 
@@ -33,7 +41,7 @@ def export_csv(data):
 
     writer.writerow([data["system_name"]])
     writer.writerow([data["title"]])
-    writer.writerow(["Generated", data["generated_at"].strftime("%Y-%m-%d %H:%M")])
+    writer.writerow(["Generated", _local_generated_at(data).strftime("%Y-%m-%d %H:%M")])
     writer.writerow([])
 
     if data["filters"]:
@@ -91,7 +99,7 @@ def export_xlsx(data):
     merge(r, data["system_name"], brand); r += 1
     merge(r, data["title"], subtitle); r += 1
     ws.cell(row=r, column=1, value="Generated").font = label_font
-    ws.cell(row=r, column=2, value=data["generated_at"].strftime("%Y-%m-%d %H:%M"))
+    ws.cell(row=r, column=2, value=_local_generated_at(data).strftime("%Y-%m-%d %H:%M"))
     r += 2
 
     if data["filters"]:

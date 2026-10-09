@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GoHMoTech redesign concept</title>
+  <style>
+    :root {
+      --ink: #18231d;
+      --muted: #6c776f;
+      --line: #dfe5de;
+      --canvas: #f4f6f1;
+      --card: #ffffff;
+      --forest: #173f2d;
+      --forest-2: #245b41;
+      --sage: #dfeadf;
+      --lime: #b9d65d;
+      --amber: #d79227;
+      --amber-bg: #fff4da;
+      --red: #b94a3d;
+      --red-bg: #ffebe7;
+      --shadow: 0 10px 30px rgba(32, 58, 43, .07);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--canvas);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button { font: inherit; }
+
+    .app { min-height: 100vh; display: grid; grid-template-columns: 228px 1fr; }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 22px 16px;
+      color: #d9e7de;
+      background: var(--forest);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .brand { display: flex; align-items: center; gap: 11px; padding: 0 8px 26px; }
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      border-radius: 11px;
+      display: grid;
+      place-items: center;
+      color: var(--forest);
+      background: var(--lime);
+      font-size: 21px;
+      font-weight: 900;
+    }
+    .brand strong { display: block; color: white; letter-spacing: -.02em; }
+    .brand small { color: #94b0a0; }
+
+    .nav-title {
+      margin: 15px 10px 7px;
+      color: #789486;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 42px;
+      margin: 2px 0;
+      padding: 0 12px;
+      border-radius: 9px;
+      color: #bdd0c4;
+      font-size: 13px;
+      text-decoration: none;
+    }
+    .nav-item span:first-child { width: 20px; text-align: center; font-size: 16px; }
+    .nav-item.active { color: white; background: rgba(185, 214, 93, .15); }
+    .nav-item.active span:first-child { color: var(--lime); }
+    .nav-badge { margin-left: auto; min-width: 20px; padding: 2px 6px; border-radius: 999px; color: white; background: #a74338; font-size: 10px; text-align: center; }
+
+    .farm-card {
+      margin-top: auto;
+      padding: 13px;
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 12px;
+      background: rgba(255,255,255,.05);
+    }
+    .farm-card small { color: #91a99b; }
+    .farm-card strong { display: block; margin: 4px 0 8px; color: white; font-size: 13px; }
+    .online { display: flex; align-items: center; gap: 7px; color: #bcd687; font-size: 11px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 3px rgba(185,214,93,.1); }
+
+    .main { min-width: 0; }
+    .topbar {
+      height: 68px;
+      padding: 0 30px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,.87);
+      backdrop-filter: blur(10px);
+    }
+    .crumb { color: var(--muted); font-size: 12px; }
+    .top-actions { display: flex; align-items: center; gap: 12px; }
+    .icon-button, .avatar { border: 1px solid var(--line); background: white; }
+    .icon-button { position: relative; width: 36px; height: 36px; border-radius: 10px; color: #435048; }
+    .notification-dot { position: absolute; right: 7px; top: 6px; width: 7px; height: 7px; border: 2px solid white; border-radius: 50%; background: var(--red); }
+    .avatar { width: 36px; height: 36px; border-radius: 50%; color: white; background: var(--forest-2); font-size: 11px; font-weight: 800; }
+    .profile { line-height: 1.2; }
+    .profile strong { display: block; font-size: 12px; }
+    .profile small { color: var(--muted); font-size: 10px; }
+
+    .content { max-width: 1500px; margin: auto; padding: 25px 30px 34px; }
+    .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 20px; }
+    h1 { margin: 0 0 4px; font-size: 26px; line-height: 1.15; letter-spacing: -.035em; }
+    .page-head p { margin: 0; color: var(--muted); font-size: 12px; }
+    .system-ok { display: inline-flex; align-items: center; gap: 8px; padding: 8px 11px; border: 1px solid #cbdccf; border-radius: 9px; color: var(--forest-2); background: #f7fbf5; font-size: 11px; font-weight: 700; }
+
+    .stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+    .stat {
+      min-height: 106px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: var(--card);
+      box-shadow: var(--shadow);
+    }
+    .stat-top { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 11px; font-weight: 700; }
+    .stat-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; color: var(--forest-2); background: var(--sage); font-size: 15px; }
+    .stat-value { margin-top: 7px; font-size: 24px; font-weight: 800; letter-spacing: -.04em; }
+    .stat-foot { margin-top: 3px; color: var(--muted); font-size: 10px; }
+    .good { color: #347052; }
+    .warn { color: var(--amber); }
+
+    .upper-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(270px, .68fr); gap: 14px; margin-bottom: 14px; }
+    .card { border: 1px solid var(--line); border-radius: 14px; background: var(--card); box-shadow: var(--shadow); overflow: hidden; }
+    .card-head { min-height: 54px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #edf0ec; }
+    .card-head h2 { margin: 0 0 2px; font-size: 13px; letter-spacing: -.01em; }
+    .card-head small { color: var(--muted); font-size: 9px; }
+    .text-action { border: 0; color: var(--forest-2); background: transparent; font-size: 10px; font-weight: 800; }
+
+    .camera {
+      position: relative;
+      min-height: 326px;
+      overflow: hidden;
+      background: #cbd4bf url('../../static/images/bg4.jpg') center/cover no-repeat;
+    }
+    .camera:after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(12,30,21,.03), rgba(12,30,21,.2)); pointer-events: none; }
+    .live-chip, .camera-meta { position: absolute; z-index: 3; }
+    .live-chip { top: 14px; left: 14px; display: flex; align-items: center; gap: 6px; padding: 6px 9px; border-radius: 7px; color: white; background: rgba(16,34,24,.79); font-size: 9px; font-weight: 800; letter-spacing: .08em; }
+    .live-chip i { width: 6px; height: 6px; border-radius: 50%; background: #ee5c4e; }
+    .camera-meta { right: 14px; bottom: 13px; padding: 7px 9px; border-radius: 7px; color: white; background: rgba(16,34,24,.72); font-size: 9px; }
+    .detect-box { position: absolute; z-index: 2; border: 2px solid var(--lime); border-radius: 4px; box-shadow: 0 0 0 1px rgba(0,0,0,.12); }
+    .detect-box:before { content: attr(data-label); position: absolute; left: -2px; top: -19px; padding: 3px 5px; border-radius: 3px 3px 3px 0; color: var(--forest); background: var(--lime); font-size: 8px; font-weight: 800; }
+    .d1 { left: 6%; bottom: 25%; width: 19%; height: 37%; }
+    .d2 { left: 27%; bottom: 20%; width: 20%; height: 43%; }
+    .d3 { left: 50%; bottom: 25%; width: 17%; height: 40%; }
+
+    .alerts { padding: 4px 14px 9px; }
+    .alert-item { display: grid; grid-template-columns: 30px 1fr auto; gap: 9px; padding: 13px 0; border-bottom: 1px solid #edf0ec; }
+    .alert-item:last-child { border-bottom: 0; }
+    .alert-icon { width: 29px; height: 29px; display: grid; place-items: center; border-radius: 8px; font-size: 13px; }
+    .alert-icon.red { color: var(--red); background: var(--red-bg); }
+    .alert-icon.amber { color: var(--amber); background: var(--amber-bg); }
+    .alert-icon.green { color: #377455; background: #e6f1e6; }
+    .alert-item strong { display: block; margin-bottom: 3px; font-size: 10px; }
+    .alert-item p { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.4; }
+    .alert-item time { color: #8a948d; font-size: 8px; white-space: nowrap; }
+    .alert-footer { padding: 0 14px 14px; }
+    .alert-footer button { width: 100%; padding: 9px; border: 1px solid var(--line); border-radius: 8px; color: var(--forest-2); background: #fafbf9; font-size: 10px; font-weight: 800; }
+
+    .lower-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(330px, 1fr); gap: 14px; }
+    .chart-body { padding: 12px 15px 10px; }
+    .legend { display: flex; gap: 14px; margin-bottom: 2px; color: var(--muted); font-size: 9px; }
+    .legend span { display: flex; align-items: center; gap: 5px; }
+    .legend i { width: 12px; height: 3px; border-radius: 2px; background: var(--forest-2); }
+    .legend span:last-child i { background: var(--amber); }
+    .chart { display: block; width: 100%; height: 148px; }
+
+    .controls { padding: 13px; display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 9px; }
+    .control { min-height: 135px; padding: 13px; border: 1px solid var(--line); border-radius: 11px; background: #fbfcfa; }
+    .control-top { display: flex; justify-content: space-between; align-items: flex-start; }
+    .control-icon { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; color: var(--forest-2); background: var(--sage); font-size: 14px; }
+    .state { padding: 3px 6px; border-radius: 999px; color: #377455; background: #e5f1e5; font-size: 7px; font-weight: 900; text-transform: uppercase; }
+    .control h3 { margin: 12px 0 2px; font-size: 11px; }
+    .control p { min-height: 26px; margin: 0 0 10px; color: var(--muted); font-size: 8px; line-height: 1.5; }
+    .control button { width: 100%; padding: 7px; border: 1px solid #ccd8cf; border-radius: 7px; color: var(--forest-2); background: white; font-size: 8px; font-weight: 800; }
+
+    @media (max-width: 1050px) {
+      .app { grid-template-columns: 82px 1fr; }
+      .sidebar { padding-inline: 12px; }
+      .brand { justify-content: center; padding-inline: 0; }
+      .brand-copy, .nav-title, .nav-item:not(.active) span:nth-child(2), .nav-item.active span:nth-child(2), .nav-badge, .farm-card { display: none; }
+      .nav-item { justify-content: center; padding: 0; }
+      .nav-item span:first-child { width: auto; }
+      .upper-grid, .lower-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 700px) {
+      .app { display: block; }
+      .sidebar { position: static; width: 100%; height: auto; flex-direction: row; align-items: center; overflow-x: auto; padding: 8px 10px; }
+      .brand { padding: 0 8px 0 0; }
+      .brand-mark { width: 34px; height: 34px; }
+      .sidebar nav { display: flex; }
+      .nav-item { min-width: 40px; }
+      .topbar { padding: 0 16px; }
+      .profile { display: none; }
+      .content { padding: 19px 16px 28px; }
+      .page-head { align-items: flex-start; flex-direction: column; }
+      .stat-grid { grid-template-columns: repeat(2, 1fr); }
+      .controls { grid-template-columns: 1fr; }
+      .camera { min-height: 260px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">G</div>
+        <div class="brand-copy"><strong>GoHMoTech</strong><small>Smart Goat House</small></div>
+      </div>
+      <nav aria-label="Primary navigation">
+        <div class="nav-title">Overview</div>
+        <a class="nav-item active" href="#"><span>⌂</span><span>Farm overview</span></a>
+        <a class="nav-item" href="#"><span>◎</span><span>Live monitoring</span><b class="nav-badge">2</b></a>
+        <div class="nav-title">Operations</div>
+        <a class="nav-item" href="#"><span>♙</span><span>Goat records</span></a>
+        <a class="nav-item" href="#"><span>⌁</span><span>Tracking</span></a>
+        <a class="nav-item" href="#"><span>⚙</span><span>Automation</span></a>
+        <a class="nav-item" href="#"><span>▤</span><span>Reports</span></a>
+        <div class="nav-title">Business</div>
+        <a class="nav-item" href="#"><span>◇</span><span>Marketplace</span></a>
+        <a class="nav-item" href="#"><span>?</span><span>Support</span></a>
+      </nav>
+      <div class="farm-card">
+        <small>Current site</small>
+        <strong>Main Goat House</strong>
+        <span class="online"><i class="dot"></i> All systems operational</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="crumb">Main Goat House&nbsp;&nbsp;/&nbsp;&nbsp;Overview</div>
+        <div class="top-actions">
+          <button class="icon-button" aria-label="Notifications">♢<i class="notification-dot"></i></button>
+          <button class="avatar">JA</button>
+          <div class="profile"><strong>Juan Admin</strong><small>Farm owner</small></div>
+        </div>
+      </header>
+
+      <div class="content">
+        <section class="page-head">
+          <div><h1>Farm overview</h1><p>Friday, October 2 · Live operational summary</p></div>
+          <span class="system-ok"><i class="dot"></i> All systems operational</span>
+        </section>
+
+        <section class="stat-grid" aria-label="Farm summary">
+          <article class="stat"><div class="stat-top"><span>Total goats</span><i class="stat-icon">♙</i></div><div class="stat-value">48</div><div class="stat-foot"><span class="good">46 healthy</span> · 2 monitoring</div></article>
+          <article class="stat"><div class="stat-top"><span>Feed level</span><i class="stat-icon">◒</i></div><div class="stat-value">72%</div><div class="stat-foot">7.2 kg · enough for 3 days</div></article>
+          <article class="stat"><div class="stat-top"><span>Online devices</span><i class="stat-icon">⌁</i></div><div class="stat-value">8 / 9</div><div class="stat-foot"><span class="warn">1 camera needs attention</span></div></article>
+          <article class="stat"><div class="stat-top"><span>Barn climate</span><i class="stat-icon">☼</i></div><div class="stat-value">27.4°</div><div class="stat-foot">Humidity 68% · comfortable</div></article>
+        </section>
+
+        <section class="upper-grid">
+          <article class="card">
+            <div class="card-head"><div><h2>Live barn</h2><small>Camera 01 · North pen</small></div><button class="text-action">Open monitoring →</button></div>
+            <div class="camera">
+              <span class="live-chip"><i></i> LIVE · AI DETECTION</span>
+              <span class="detect-box d1" data-label="Goat 94%"></span>
+              <span class="detect-box d2" data-label="Goat 91%"></span>
+              <span class="detect-box d3" data-label="Goat 96%"></span>
+              <span class="camera-meta">6 goats visible · updated now</span>
+            </div>
+          </article>
+
+          <aside class="card">
+            <div class="card-head"><div><h2>Priority alerts</h2><small>2 items need attention</small></div><button class="text-action">Mark read</button></div>
+            <div class="alerts">
+              <div class="alert-item"><span class="alert-icon red">!</span><div><strong>Person detected after hours</strong><p>South entrance camera · review snapshot</p></div><time>2m</time></div>
+              <div class="alert-item"><span class="alert-icon amber">⌁</span><div><strong>Camera 03 is offline</strong><p>No heartbeat for 12 minutes</p></div><time>12m</time></div>
+              <div class="alert-item"><span class="alert-icon green">✓</span><div><strong>Morning feeding completed</strong><p>1.5 kg dispensed successfully</p></div><time>6:00</time></div>
+              <div class="alert-item"><span class="alert-icon amber">♙</span><div><strong>Goat G-017 under monitoring</strong><p>Weight decreased 4% this month</p></div><time>1h</time></div>
+            </div>
+            <div class="alert-footer"><button>View all alerts</button></div>
+          </aside>
+        </section>
+
+        <section class="lower-grid">
+          <article class="card">
+            <div class="card-head"><div><h2>Environment</h2><small>Past 24 hours · sensor readings</small></div><button class="text-action">Full report →</button></div>
+            <div class="chart-body">
+              <div class="legend"><span><i></i> Temperature</span><span><i></i> Humidity</span></div>
+              <svg class="chart" viewBox="0 0 720 160" preserveAspectRatio="none" role="img" aria-label="Temperature and humidity trend">
+                <defs><linearGradient id="fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#245b41" stop-opacity=".2"/><stop offset="1" stop-color="#245b41" stop-opacity="0"/></linearGradient></defs>
+                <g stroke="#e6ebe5" stroke-width="1"><line x1="0" y1="25" x2="720" y2="25"/><line x1="0" y1="65" x2="720" y2="65"/><line x1="0" y1="105" x2="720" y2="105"/><line x1="0" y1="145" x2="720" y2="145"/></g>
+                <path d="M0 115 C55 108 78 91 125 96 S215 124 270 91 S356 54 410 66 S507 103 560 78 S650 42 720 55 L720 145 L0 145 Z" fill="url(#fill)"/>
+                <path d="M0 115 C55 108 78 91 125 96 S215 124 270 91 S356 54 410 66 S507 103 560 78 S650 42 720 55" fill="none" stroke="#245b41" stroke-width="3"/>
+                <path d="M0 58 C70 68 90 44 145 52 S235 81 295 68 S370 92 430 83 S520 48 585 58 S665 76 720 69" fill="none" stroke="#d79227" stroke-width="2.5" stroke-dasharray="5 4"/>
+                <g fill="#7d8981" font-size="9"><text x="0" y="158">12 AM</text><text x="170" y="158">6 AM</text><text x="350" y="158">12 PM</text><text x="530" y="158">6 PM</text><text x="690" y="158">Now</text></g>
+              </svg>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="card-head"><div><h2>Quick controls</h2><small>Owner-only actions · every change is logged</small></div></div>
+            <div class="controls">
+              <div class="control"><div class="control-top"><i class="control-icon">↔</i><span class="state">Closed</span></div><h3>Door</h3><p>Automatic mode<br>Next open 5:30 AM</p><button>Open door</button></div>
+              <div class="control"><div class="control-top"><i class="control-icon">☼</i><span class="state">Auto</span></div><h3>Lights</h3><p>38% light level<br>Rule active</p><button>Turn on</button></div>
+              <div class="control"><div class="control-top"><i class="control-icon">◒</i><span class="state">Ready</span></div><h3>Feeder</h3><p>Next feed 5:30 PM<br>Amount 1.5 kg</p><button>Feed now</button></div>
+            </div>
+          </article>
+        </section>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

@@ -2,26 +2,421 @@
 
 {% block title %}Model Management - GoHMoTech{% endblock %}
 
-{% block content %}
-<div class="container">
-    <h2><i class="bi bi-cpu"></i> ML Model Management</h2>
-    <p class="text-muted">Manage and configure AI detection models</p>
+{% block extra_css %}
+    .model-file-summary, .model-upload-status {
+        border: 1px solid var(--border-color); border-radius: var(--radius-md);
+        background: var(--card-bg-subtle); padding: 1rem; margin-top: .8rem;
+    }
+    .model-file-summary { display: flex; align-items: center; gap: .8rem; }
+    .model-file-summary > i { font-size: 1.65rem; color: var(--primary-600); }
+    .model-file-summary strong, .model-file-summary span { display: block; overflow-wrap: anywhere; }
+    .model-file-summary span { color: var(--text-secondary); font-size: .82rem; }
+    .model-upload-head { display: flex; justify-content: space-between; gap: 1rem; align-items: start; }
+    .model-upload-head strong, .model-upload-head span { display: block; }
+    .model-upload-head span { color: var(--text-secondary); font-size: .82rem; }
+    .model-upload-state { font-weight: 700; color: var(--primary-700); }
+    .model-progress-track { height: 12px; overflow: hidden; border-radius: 999px; background: var(--border-color); margin: .9rem 0 .55rem; }
+    .model-progress-bar { width: 0; height: 100%; background: var(--primary-600); transition: width .15s linear; }
+    .model-progress-bar.success { background: var(--success); }
+    .model-progress-bar.failed { background: var(--danger); }
+    .model-upload-numbers { display: grid; grid-template-columns: repeat(3, 1fr); gap: .65rem; }
+    .model-upload-numbers div { font-size: .78rem; color: var(--text-secondary); }
+    .model-upload-numbers strong { display: block; color: var(--text-primary); font-size: .9rem; }
+    .model-upload-detail { margin: .8rem 0 0; color: var(--text-secondary); }
+    @media (max-width: 576px) {
+        .model-upload-head { flex-direction: column; gap: .35rem; }
+        .model-upload-numbers { grid-template-columns: 1fr; gap: .35rem; }
+    }
+{% endblock %}
 
-    <div class="row mt-4">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-body text-center py-5">
-                    <i class="bi bi-cpu" style="font-size: 4rem; color: #ccc;"></i>
-                    <h4 class="mt-3 text-muted">ML Models</h4>
-                    <p class="text-muted">Upload and manage your trained goat detection models</p>
-                    <div class="mt-4">
-                        <button class="btn btn-primary">
-                            <i class="bi bi-upload"></i> Upload Model
-                        </button>
+{% block content %}
+<div class="container" id="modelManagement" data-api-url="{% url 'ml_models:mlmodel-list' %}">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            <h2><i class="bi bi-cpu"></i> ML Model Management</h2>
+            <p class="text-muted mb-0">Upload, validate, and activate detection models.</p>
+        </div>
+        <button class="btn btn-primary" type="button" data-bs-toggle="collapse"
+                data-bs-target="#uploadModelPanel" aria-expanded="false">
+            <i class="bi bi-upload"></i> Upload Model
+        </button>
+    </div>
+
+    <div class="collapse mb-4" id="uploadModelPanel">
+        <div class="card shadow-sm">
+            <div class="card-header"><strong>Upload trained weights</strong></div>
+            <div class="card-body">
+                <form id="modelUploadForm" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="modelName">Name</label>
+                            <input class="form-control" id="modelName" name="name" required
+                                   placeholder="Goat RF-DETR model">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label" for="modelVersion">Version</label>
+                            <input class="form-control" id="modelVersion" name="version"
+                                   value="1.0" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label" for="modelCategory">Category</label>
+                            <select class="form-select" id="modelCategory" name="category" required>
+                                {% for value, label in category_choices %}
+                                <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="modelType">Model type</label>
+                            <select class="form-select" id="modelType" name="model_type" required>
+                                {% for value, label in model_type_choices %}
+                                <option value="{{ value }}"{% if value == 'rfdetr' %} selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">For RF-DETR, select the exact model size used during training.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="modelFile">Weights file</label>
+                            <input class="form-control" id="modelFile" name="model_file" type="file"
+                                   accept=".pt,.pth,.ckpt,.onnx,.tflite,.h5,.keras" required>
+                            <div class="form-text">For RF-DETR, upload the original .pth, .pt, or .ckpt best checkpoint.</div>
+                            <div class="model-file-summary d-none" id="modelFileSummary">
+                                <i class="bi bi-file-earmark-binary"></i>
+                                <div><strong id="selectedFileName"></strong><span id="selectedFileMeta"></span></div>
+                            </div>
+                        </div>
+                        <div class="col-md-6" id="rfdetrVariantGroup">
+                            <label class="form-label" for="rfdetrVariant">RF-DETR model size</label>
+                            <select class="form-select" id="rfdetrVariant" name="rfdetr_variant" required>
+                                <option value="" selected disabled>Select the trained model size</option>
+                                <option value="nano">Nano</option>
+                                <option value="small">Small</option>
+                                <option value="medium">Medium</option>
+                                <option value="large">Large</option>
+                            </select>
+                            <div class="form-text">A wrong size can load only part of the checkpoint and produce unreliable detections.</div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" for="modelDescription">Description</label>
+                            <textarea class="form-control" id="modelDescription" name="description" rows="2"></textarea>
+                        </div>
                     </div>
-                </div>
+                    <section class="model-upload-status d-none" id="modelUploadStatus" aria-live="polite">
+                        <div class="model-upload-head">
+                            <div><span>Model Upload</span><strong id="uploadStatusFile">No file selected</strong></div>
+                            <div class="model-upload-state" id="uploadState">Preparing upload</div>
+                        </div>
+                        <div class="model-progress-track" role="progressbar" id="uploadProgress"
+                             aria-label="Model upload progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                            <div class="model-progress-bar" id="uploadProgressBar"></div>
+                        </div>
+                        <div class="model-upload-numbers">
+                            <div>Uploaded<strong id="uploadedSize">0 B</strong></div>
+                            <div>Remaining<strong id="remainingSize">0 B</strong></div>
+                            <div>Progress<strong id="uploadPercent">0%</strong></div>
+                        </div>
+                        <p class="model-upload-detail" id="uploadDetail">Preparing the upload request.</p>
+                        <button class="btn btn-sm btn-outline-primary mt-2 d-none" id="uploadRefresh" type="button">
+                            <i class="bi bi-arrow-clockwise"></i> Refresh model list
+                        </button>
+                    </section>
+                    <div class="alert mt-3 d-none" id="uploadMessage" role="alert"></div>
+                    <button class="btn btn-primary mt-3" id="uploadSubmit" type="submit">
+                        <i class="bi bi-upload"></i> Upload weights
+                    </button>
+                </form>
             </div>
         </div>
     </div>
+
+    <div class="alert d-none" id="modelActionMessage" role="status" aria-live="polite"></div>
+    <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>Registered models</strong>
+            <span class="badge text-bg-secondary">{{ models|length }}</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead><tr><th>Name</th><th>Type</th><th>Category</th><th>Status</th><th>File</th><th>Actions</th></tr></thead>
+                <tbody>
+                    {% for model in models %}
+                    <tr>
+                        <td><strong>{{ model.name }}</strong><br><small class="text-muted">v{{ model.version }}</small></td>
+                        <td>{{ model.get_model_type_display }}</td>
+                        <td>{{ model.get_category_display }}</td>
+                        <td>
+                            {% if model.is_active %}<span class="badge text-bg-success">Active</span>
+                            {% else %}<span class="badge text-bg-secondary">{{ model.get_status_display }}</span>{% endif %}
+                        </td>
+                        <td>{% if model.model_file %}{{ model.model_file.name|truncatechars:34 }}{% else %}External{% endif %}</td>
+                        <td class="text-nowrap">
+                            {% if model.model_file and model.status == 'uploaded' or model.model_file and model.status == 'rejected' or model.model_file and model.status == 'archived' %}
+                            <button class="btn btn-sm btn-outline-primary model-action" data-id="{{ model.id }}" data-action="validate">Validate</button>
+                            {% endif %}
+                            {% if model.status == 'validated' or model.status == 'inactive' %}
+                            <button class="btn btn-sm btn-success model-action" data-id="{{ model.id }}" data-action="activate">Activate</button>
+                            {% endif %}
+                            {% if model.is_active %}
+                            <button class="btn btn-sm btn-outline-secondary model-action" data-id="{{ model.id }}" data-action="deactivate">Deactivate</button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="text-center text-muted py-5">No models registered yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(() => {
+    const root = document.getElementById('modelManagement');
+    const apiUrl = root.dataset.apiUrl;
+    const form = document.getElementById('modelUploadForm');
+    const message = document.getElementById('uploadMessage');
+    const actionMessage = document.getElementById('modelActionMessage');
+    const submit = document.getElementById('uploadSubmit');
+    const fileInput = document.getElementById('modelFile');
+    const fileSummary = document.getElementById('modelFileSummary');
+    const selectedFileName = document.getElementById('selectedFileName');
+    const selectedFileMeta = document.getElementById('selectedFileMeta');
+    const statusPanel = document.getElementById('modelUploadStatus');
+    const statusFile = document.getElementById('uploadStatusFile');
+    const uploadState = document.getElementById('uploadState');
+    const progress = document.getElementById('uploadProgress');
+    const progressBar = document.getElementById('uploadProgressBar');
+    const uploadedSize = document.getElementById('uploadedSize');
+    const remainingSize = document.getElementById('remainingSize');
+    const uploadPercent = document.getElementById('uploadPercent');
+    const uploadDetail = document.getElementById('uploadDetail');
+    const refreshButton = document.getElementById('uploadRefresh');
+    const modelType = document.getElementById('modelType');
+    const variantGroup = document.getElementById('rfdetrVariantGroup');
+    const csrf = form.querySelector('[name=csrfmiddlewaretoken]').value;
+    let uploadInProgress = false;
+    let lastUploadedBytes = 0;
+
+    function updateVariantVisibility() {
+        const isRfdetr = modelType.value === 'rfdetr';
+        variantGroup.classList.toggle('d-none', !isRfdetr);
+        document.getElementById('rfdetrVariant').required = isRfdetr;
+    }
+    modelType.addEventListener('change', updateVariantVisibility);
+    updateVariantVisibility();
+
+    function showMessage(text, isError, variant = '') {
+        message.textContent = text;
+        const style = variant || (isError ? 'alert-danger' : 'alert-success');
+        message.className = `alert mt-3 ${style}`;
+    }
+
+    function showActionMessage(text, isError, variant = '') {
+        actionMessage.textContent = text;
+        const style = variant || (isError ? 'alert-danger' : 'alert-success');
+        actionMessage.className = `alert ${style}`;
+    }
+
+    function formatBytes(bytes) {
+        if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+        const value = bytes / Math.pow(1024, index);
+        const digits = index === 0 ? 0 : 1;
+        return `${value.toFixed(digits)} ${units[index]}`;
+    }
+
+    function selectedFileType(file) {
+        const extension = file.name.includes('.') ? file.name.split('.').pop().toUpperCase() : 'Unknown';
+        return file.type || `${extension} model weights`;
+    }
+
+    function setControlsDisabled(disabled) {
+        Array.from(form.elements).forEach((control) => {
+            if (control !== refreshButton) control.disabled = disabled;
+        });
+        submit.disabled = disabled;
+    }
+
+    function setProgress(uploaded, total) {
+        const safeTotal = Math.max(total || 0, 0);
+        const safeUploaded = Math.min(Math.max(uploaded || 0, 0), safeTotal || uploaded || 0);
+        const percent = safeTotal ? Math.min(100, Math.round((safeUploaded / safeTotal) * 100)) : 0;
+        lastUploadedBytes = safeUploaded;
+        progressBar.style.width = `${percent}%`;
+        progress.setAttribute('aria-valuenow', String(percent));
+        progress.setAttribute('aria-valuetext', `${formatBytes(safeUploaded)} of ${formatBytes(safeTotal)} uploaded`);
+        uploadedSize.textContent = formatBytes(safeUploaded);
+        remainingSize.textContent = formatBytes(Math.max(safeTotal - safeUploaded, 0));
+        uploadPercent.textContent = `${percent}%`;
+    }
+
+    function setUploadState(state, detail, kind = 'working') {
+        uploadState.textContent = state;
+        uploadDetail.textContent = detail;
+        progressBar.classList.toggle('success', kind === 'success');
+        progressBar.classList.toggle('failed', kind === 'failed');
+    }
+
+    function responseError(statusCode, data) {
+        if (data && data.error) return data.error;
+        if (statusCode === 413) return 'The file is larger than the server upload limit.';
+        if (statusCode === 408 || statusCode === 504) return 'The upload timed out before the server finished receiving it.';
+        if (statusCode === 507) return 'Server storage is unavailable or does not have enough free space.';
+        if (statusCode >= 500) return 'The server could not process the upload. Please try again or contact the administrator.';
+        return 'The upload was rejected. Check the file and model details, then try again.';
+    }
+
+    function readJson(text) {
+        try { return JSON.parse(text || '{}'); } catch (_error) { return {}; }
+    }
+
+    fileInput.addEventListener('change', () => {
+        if (uploadInProgress) return;
+        const file = fileInput.files[0];
+        message.classList.add('d-none');
+        refreshButton.classList.add('d-none');
+        statusPanel.classList.add('d-none');
+        progressBar.classList.remove('success', 'failed');
+        setProgress(0, file ? file.size : 0);
+        if (!file) {
+            fileSummary.classList.add('d-none');
+            return;
+        }
+        selectedFileName.textContent = file.name;
+        selectedFileMeta.textContent = `${formatBytes(file.size)} · ${selectedFileType(file)}`;
+        fileSummary.classList.remove('d-none');
+        submit.disabled = false;
+    });
+
+    refreshButton.addEventListener('click', () => window.location.reload());
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (uploadInProgress || !form.reportValidity()) return;
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        const formData = new FormData(form);
+        uploadInProgress = true;
+        setControlsDisabled(true);
+        message.classList.add('d-none');
+        refreshButton.classList.add('d-none');
+        statusPanel.classList.remove('d-none');
+        statusFile.textContent = `${file.name} — ${formatBytes(file.size)}`;
+        setProgress(0, file.size);
+        setUploadState('Preparing upload', 'Checking file limits and available server storage.');
+
+        try {
+            const preflight = await fetch(`${apiUrl}upload-session/`, {
+                method: 'POST',
+                headers: {'X-CSRFToken': csrf, 'Content-Type': 'application/json'},
+                body: JSON.stringify({filename: file.name, size: file.size})
+            });
+            const preflightData = readJson(await preflight.text());
+            if (!preflight.ok) throw new Error(responseError(preflight.status, preflightData));
+
+            setUploadState('Uploading', 'Transferring the model file to GoHMoTech in secure chunks.');
+            const chunkSize = preflightData.chunk_size;
+            const totalChunks = preflightData.total_chunks;
+            for (let index = 0; index < totalChunks; index += 1) {
+                const start = index * chunkSize;
+                const end = Math.min(start + chunkSize, file.size);
+                const chunkData = new FormData();
+                chunkData.append('upload_id', preflightData.upload_id);
+                chunkData.append('chunk_index', String(index));
+                chunkData.append('chunk', file.slice(start, end), `${file.name}.part`);
+                await new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', `${apiUrl}upload-chunk/`);
+                    xhr.setRequestHeader('X-CSRFToken', csrf);
+                    xhr.timeout = 5 * 60 * 1000;
+                    xhr.upload.addEventListener('progress', (progressEvent) => {
+                        if (!progressEvent.lengthComputable) return;
+                        const chunkBytes = Math.min(end - start, Math.round((progressEvent.loaded / progressEvent.total) * (end - start)));
+                        const uploaded = Math.min(file.size, start + chunkBytes);
+                        setProgress(uploaded, file.size);
+                        setUploadState('Uploading', `${formatBytes(uploaded)} of ${formatBytes(file.size)} uploaded · chunk ${index + 1} of ${totalChunks}.`);
+                    });
+                    xhr.addEventListener('load', () => {
+                        const data = readJson(xhr.responseText);
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            setProgress(end, file.size);
+                            resolve(data);
+                        } else reject(new Error(responseError(xhr.status, data)));
+                    });
+                    xhr.addEventListener('error', () => reject(new Error('Connection interrupted. The upload must be retried from the beginning.')));
+                    xhr.addEventListener('timeout', () => reject(new Error('Upload timed out. Check the connection and retry from the beginning.')));
+                    xhr.addEventListener('abort', () => reject(new Error('Upload cancelled. Retry to start again from the beginning.')));
+                    xhr.send(chunkData);
+                });
+            }
+
+            setProgress(file.size, file.size);
+            setUploadState('Upload complete', 'All chunks arrived. The server is validating and storing the assembled model.');
+            const completionData = Object.fromEntries(formData.entries());
+            delete completionData.model_file;
+            completionData.upload_id = preflightData.upload_id;
+            const completion = await fetch(`${apiUrl}complete-upload/`, {
+                method: 'POST',
+                headers: {'X-CSRFToken': csrf, 'Content-Type': 'application/json'},
+                body: JSON.stringify(completionData)
+            });
+            const result = readJson(await completion.text());
+            if (!completion.ok) throw new Error(responseError(completion.status, result));
+
+            setProgress(file.size, file.size);
+            const storedStatus = result.status_display || result.status || 'Uploaded (pending validation)';
+            const activeText = result.is_active ? 'Active' : 'Not active — validation and activation are separate steps';
+            setUploadState(
+                'Upload successful',
+                `${file.name} was received and stored at ${new Date().toLocaleString()}. Status: ${storedStatus}. ${activeText}.`,
+                'success'
+            );
+            showMessage('Model uploaded successfully. Refresh the model list to validate it.', false);
+            refreshButton.classList.remove('d-none');
+        } catch (error) {
+            const percent = file.size ? Math.min(100, Math.round((lastUploadedBytes / file.size) * 100)) : 0;
+            const reason = error instanceof TypeError
+                ? 'Connection interrupted. The upload must be retried from the beginning.'
+                : error.message;
+            setUploadState('Upload failed', `Upload failed at ${percent}%. ${reason}`, 'failed');
+            showMessage(reason, true);
+            uploadInProgress = false;
+            setControlsDisabled(false);
+        }
+    });
+
+    document.querySelectorAll('.model-action').forEach((button) => {
+        button.addEventListener('click', async () => {
+            button.disabled = true;
+            const actionLabels = {
+                validate: 'Validating model…',
+                activate: 'Loading and activating model…',
+                deactivate: 'Deactivating model…'
+            };
+            showActionMessage(actionLabels[button.dataset.action] || 'Updating model…', false, 'alert-info');
+            try {
+                const response = await fetch(`${apiUrl}${button.dataset.id}/${button.dataset.action}/`, {
+                    method: 'POST', headers: {'X-CSRFToken': csrf}
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || `${button.dataset.action} failed.`);
+                showActionMessage(
+                    button.dataset.action === 'activate' ? 'Model activated successfully.' : 'Model updated successfully.',
+                    false
+                );
+                window.location.reload();
+            } catch (error) {
+                showActionMessage(error.message, true);
+                button.disabled = false;
+            }
+        });
+    });
+})();
+</script>
 {% endblock %}

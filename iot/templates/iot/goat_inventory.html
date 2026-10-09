@@ -236,11 +236,11 @@
         <div>
             <div class="page-eyebrow">Livestock</div>
             <h1>Goat Inventory</h1>
-            <p class="page-subtitle">Livestock records — view, search, and manage your herd</p>
+            <p class="page-subtitle">Find a goat, check its status, or register a new one.</p>
         </div>
         <div class="page-actions">
             <a href="{% url 'iot:goat_comparison' %}" class="btn btn-outline">
-                <i class="bi bi-arrow-left-right"></i> Compare Photos
+                <i class="bi bi-arrow-left-right"></i> Compare Goats
             </a>
         {% if can_manage_farm %}
             <a href="{% url 'iot:add_goat' %}" class="btn btn-primary">
@@ -335,7 +335,7 @@
 
                 <div class="goat-card-footer">
                     <a href="{% url 'iot:goat_detail_enhanced' goat.goat_id %}" class="btn btn-primary btn-sm">
-                        <i class="bi bi-pencil-square"></i> Manage
+                        <i class="bi bi-eye"></i> View
                     </a>
                 </div>
             </div>
@@ -345,8 +345,8 @@
         <div class="content-card">
             <div class="empty-state">
                 <i class="bi bi-inbox"></i>
-                <h5>No goats found</h5>
-                <p>Try adjusting your filters, or add your first goat to get started.</p>
+                <h5>{% if search_query or status_filter != 'all' %}No goats match these filters{% else %}No goats have been registered yet{% endif %}</h5>
+                <p>{% if search_query or status_filter != 'all' %}Clear or change the filters to see other goats.{% else %}Add your first goat to start monitoring your herd.{% endif %}</p>
                 {% if can_manage_farm %}<a href="{% url 'iot:add_goat' %}" class="btn btn-primary mt-3">
                     <i class="bi bi-plus-circle"></i> Add Goat
                 </a>{% endif %}

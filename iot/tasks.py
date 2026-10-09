@@ -10,7 +10,6 @@ Background tasks for:
 
 from celery import shared_task
 from django.utils import timezone
-from django.db.models import Max, Min, Count
 from datetime import timedelta
 import logging
 
@@ -43,27 +42,26 @@ __all__ = [
 
 @shared_task
 def aggregate_sensor_data():
-    """
-    Aggregate sensor data into hourly summaries.
-    This helps reduce database size and improve query performance.
-    """
-    from .models import SensorData
-    from django.db.models import Avg
-    
-    # Get data from last hour
-    one_hour_ago = timezone.now() - timedelta(hours=1)
-    recent_data = SensorData.objects.filter(timestamp__gte=one_hour_ago)
-    
-    # Group by device and sensor type
-    aggregated = recent_data.values('device', 'sensor_type').annotate(
-        avg_value=Avg('value'),
-        max_value=Max('value'),
-        min_value=Min('value'),
-        count=Count('id')
-    )
-    
-    logger.info(f"Aggregated {len(aggregated)} sensor data groups")
-    return f"Aggregated {len(aggregated)} groups"
+    """Persist completed 30-minute summaries and process bounded backlog."""
+    from .sensor_storage import aggregate_due_periods
+
+    results = aggregate_due_periods()
+    summaries = sum(item['summaries'] for item in results)
+    rows = sum(item['raw_rows'] for item in results)
+    return f"Aggregated {summaries} streams from {rows} raw rows"
+
+
+@shared_task
+def check_monitoring_alerts():
+    """Periodically detect stale sensors independent of any open browser."""
+    from .monitoring import check_stale_sensors
+
+    try:
+        checked = check_stale_sensors()
+        return f"Checked {checked} sensor device(s)"
+    except Exception:
+        logger.exception("[ALERT] Monitoring health check failed")
+        return "Monitoring health check failed"
 
 
 @shared_task
@@ -90,23 +88,17 @@ def check_device_health():
 
 
 @shared_task
-def cleanup_old_sensor_data(days=90):
-    """
-    Clean up old sensor data to save database space.
-    
-    Args:
-        days: Number of days to keep (default: 90)
-    """
-    from .models import SensorData
-    
-    cutoff_date = timezone.now() - timedelta(days=days)
-    old_data = SensorData.objects.filter(timestamp__lt=cutoff_date)
-    
-    count = old_data.count()
-    old_data.delete()
-    
-    logger.info(f"Cleaned up {count} old sensor readings")
-    return f"Deleted {count} readings older than {days} days"
+def cleanup_old_sensor_data():
+    """Apply the configured, aggregation-gated raw sensor retention policy."""
+    from .sensor_storage import cleanup_aggregated_raw_data
+
+    result = cleanup_aggregated_raw_data()
+    if not result['enabled']:
+        return "Raw sensor cleanup disabled pending summary verification"
+    return (
+        f"Deleted {result['deleted']} processed raw readings older than "
+        f"{result['retention_days']} days"
+    )
 
 
 @shared_task

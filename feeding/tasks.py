@@ -117,15 +117,14 @@ def check_low_feed_levels():
     from .models import FeedLevel
     from iot.models import Alert
     
-    low_feeders = FeedLevel.objects.filter(
-        current_level_grams__lt=F('low_level_threshold')
-    )
+    all_levels = FeedLevel.objects.select_related('feeder').all()
+    low_feeders = all_levels.filter(current_level_grams__lt=F('low_level_threshold'))
     
     for feed_level in low_feeders:
         # Check if there's already an unresolved alert
         existing_alert = Alert.objects.filter(
             device=feed_level.feeder,
-            message__contains='Low feed level',
+            deduplication_key=f'feed-low:{feed_level.feeder_id}',
             is_resolved=False
         ).exists()
         
@@ -133,8 +132,24 @@ def check_low_feed_levels():
             Alert.objects.create(
                 device=feed_level.feeder,
                 severity='high',
+                alert_kind='feed_low',
+                deduplication_key=f'feed-low:{feed_level.feeder_id}',
                 message=f'Low feed level: {feed_level.current_level_grams}g remaining (threshold: {feed_level.low_level_threshold}g)'
             )
             logger.warning(f"Low feed alert created for {feed_level.feeder.name}")
+
+    # Recovery closes the current condition. A later low reading can therefore
+    # create a fresh alert, while a continuously-low feeder remains deduplicated.
+    normal_feeders = all_levels.filter(current_level_grams__gte=F('low_level_threshold'))
+    for feed_level in normal_feeders:
+        open_alerts = Alert.objects.filter(
+            device=feed_level.feeder,
+            deduplication_key=f'feed-low:{feed_level.feeder_id}',
+            is_resolved=False,
+        )
+        for alert in open_alerts:
+            alert.is_resolved = True
+            alert.resolved_at = timezone.now()
+            alert.save(update_fields=['is_resolved', 'resolved_at'])
     
     return f"Checked {low_feeders.count()} feeders with low levels"

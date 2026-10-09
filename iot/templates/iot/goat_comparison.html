@@ -3,7 +3,30 @@
 
 {% block title %}Compare Goat Photos - GoHMoTech{% endblock %}
 {% block header_title %}Compare Goats{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'css/goat-photos.css' %}?v=mobile-14">{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/goat-photos.css' %}?v=mobile-16">
+<style>
+    /* Keep comparison photos at their natural ratio. This intentionally lives
+       with the page so an older collected stylesheet cannot crop the image. */
+    .comparison-photo-frame {
+        aspect-ratio: auto;
+        height: min(62vh, 620px);
+        min-height: 280px;
+    }
+    .comparison-photo-frame img {
+        display: block;
+        width: auto !important;
+        height: auto !important;
+        max-width: 100% !important;
+        max-height: 100% !important;
+        object-fit: contain !important;
+        object-position: center !important;
+    }
+    @media (max-width: 640px) {
+        .comparison-photo-frame { height: min(58vh, 520px); min-height: 240px; }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="manage-page">

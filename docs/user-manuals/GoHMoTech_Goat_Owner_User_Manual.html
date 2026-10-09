@@ -1,0 +1,470 @@
+<!doctype html><html><head><meta charset="utf-8"><title>GoHMoTech Goat Owner User Manual</title><style>
+@page {
+  size: A4;
+  margin: 18mm 16mm 19mm;
+  @bottom-center { content: "Farm Owner Manual — Page " counter(page) " of " counter(pages); color: #526259; font-size: 8pt; }
+}
+* { box-sizing: border-box; }
+html { font-family: Arial, Helvetica, sans-serif; color: #1c2520; font-size: 10.5pt; line-height: 1.42; }
+body { margin: 0; }
+h1 { color: #174f38; font-size: 22pt; border-bottom: 2px solid #174f38; padding-bottom: 5mm; margin: 0 0 7mm; break-before: page; }
+h1.cover-title { break-before: auto; border: 0; font-size: 31pt; margin: 22mm 0 4mm; padding: 0; text-align: center; }
+h1.cover-subtitle { break-before: auto; border: 0; font-size: 24pt; margin: 10mm 0 10mm; padding: 0; text-align: center; }
+h2 { color: #174f38; font-size: 16pt; margin: 7mm 0 3mm; break-after: avoid; }
+h3 { color: #2f654b; font-size: 12.5pt; margin: 5mm 0 2mm; break-after: avoid; }
+h4, h5, h6 { color: #2f654b; break-after: avoid; }
+p { margin: 0 0 3.2mm; orphans: 3; widows: 3; }
+strong { color: #14271d; }
+ul, ol { margin: 1.5mm 0 4mm 6mm; padding-left: 5mm; }
+li { margin-bottom: 1.2mm; }
+table { width: 100%; border-collapse: collapse; margin: 3mm 0 6mm; font-size: 8.8pt; break-inside: auto; }
+thead { display: table-header-group; }
+tr { break-inside: avoid; }
+th { color: #fff; background: #174f38; text-align: left; }
+th, td { border: 0.25mm solid #aebdb4; padding: 2mm; vertical-align: top; }
+tbody tr:nth-child(even) { background: #f2f6f3; }
+pre { white-space: pre-wrap; border: 0.25mm solid #b8c7be; background: #f4f7f5; padding: 4mm; break-inside: avoid; font-size: 8.5pt; }
+code { font-family: "DejaVu Sans Mono", monospace; background: #eef3f0; padding: 0 .7mm; }
+hr { border: 0; border-top: .25mm solid #b8c7be; margin: 8mm 0; }
+p:has(strong:first-child) { break-inside: avoid; }
+p:has(strong:first-child):has(strong:last-child) { padding: 3mm; border: .35mm solid #8aa596; background: #f4f8f5; }
+</style></head><body><h1 class="cover-title">GoHMoTech</h1>
+<h2 class="">Smart Goat Farm Monitoring System</h2>
+<h1 class="cover-subtitle">Goat Owner / Farm Owner User Manual</h1>
+<p><strong>[GOHMOTECH LOGO PLACEHOLDER]</strong></p>
+<p><strong>[DEVICE PHOTO NEEDED: Complete GoHMoTech System]</strong></p>
+<p>What the photo should show: the complete installed system in normal use, including the protected main unit, controller enclosures, camera, environmental sensors and feed monitoring unit.</p>
+<p>Important parts to highlight: 1. protected main unit; 2. sensor/controller unit; 3. feed unit; 4. camera; 5. protected cables.</p>
+<p><strong>Figure O-1. Complete GoHMoTech system.</strong></p>
+<table><thead><tr><th>Document field</th><th>Value</th></tr></thead><tbody>
+<tr><td>Manual version</td><td>1.0-draft</td></tr>
+<tr><td>System version</td><td><strong>[Information Needed: Deployed GoHMoTech release/version]</strong></td></tr>
+<tr><td>Date</td><td>5 October 2026</td></tr>
+<tr><td>Prepared by</td><td><strong>[Information Needed: Names of manual preparers]</strong></td></tr>
+<tr><td>Capstone group</td><td><strong>[Information Needed: Official capstone group name]</strong></td></tr>
+<tr><td>Institution</td><td><strong>[Information Needed: Institution name]</strong></td></tr>
+</tbody></table>
+<p><strong>Document status:</strong> implementation-verified draft. The Administrator must complete all installation-specific placeholders before this manual is issued.</p>
+<hr>
+<h2 class="">Document control and printing</h2>
+<p>This manual is for a GoHMoTech Farm Owner account. It explains normal physical checks and the server-rendered web portal. It does not include Administrator-only model upload, global SMS configuration, user administration, device registration or Django Settings.</p>
+<p>For the final PDF, use A4 paper, portrait orientation and automatic footer page numbers in the form “Farm Owner Manual — Page x of y.” Update the contents after photos and screenshots are inserted.</p>
+<h2 class="">Table of contents</h2>
+<ol>
+<li>About GoHMoTech and your role — 3  </li>
+<li>Safety information — 4  </li>
+<li>Know the equipment — 5  </li>
+<li>One-page Quick Start — 7  </li>
+<li>Starting, daily use and safe shutdown — 8  </li>
+<li>Login, Dashboard and navigation map — 10  </li>
+<li>Complete Farm Owner menu guide — 12  </li>
+<li>Environmental and feed monitoring — 14  </li>
+<li>Goats, weighing and tracking — 16  </li>
+<li>Camera, security and notifications — 18  </li>
+<li>Farm controls and feeding — 20  </li>
+<li>Reports and PDF generation — 21  </li>
+<li>SMS Alerts, account and logout — 23  </li>
+<li>Basic maintenance and cleaning — 24  </li>
+<li>Troubleshooting — 25  </li>
+<li>Quick-reference card, do’s and don’ts, glossary — 26  </li>
+<p>Appendix A. Photo and screenshot plan — 28</p>
+</ol>
+<hr>
+<h1 class="">1. About GoHMoTech and your role</h1>
+<p>GoHMoTech is a smart goat-house monitoring and control system. It helps a farm owner see goat records, current temperature and humidity, indoor light, rain state, air-quality signals, feed level, camera activity, goat/person detections, nearby BLE goat trackers, notifications and reports from one web portal.</p>
+<p>The Raspberry Pi is the main server. ESP32 controllers collect sensor data and receive door, light and feeder commands over Wi-Fi. A camera supplies farm images for monitoring and detection. The system can also provide SMS features when the Administrator has configured them.</p>
+<p>As a Farm Owner, you can use the farm Dashboard, manage goat records, view/operate farm equipment, review Security &amp; Alerts, use reports, register your mobile number for SMS features and use farm marketplace tools. You cannot use Administrator-only ML model management, global SMS settings, device registration or system user administration.</p>
+<p><strong>IMPORTANT:</strong> GoHMoTech supports farm decisions. Always check the real animals, feed and equipment. Missing or old data does not mean conditions are safe or normal.</p>
+<hr>
+<h1 class="">2. Safety information</h1>
+<p><strong>WARNING</strong></p>
+<ul>
+<li>Keep electronic equipment dry and protected from rain, wash water and animals.</li>
+<li>Do not open a powered enclosure or touch exposed wiring.</li>
+<li>Keep goats, people and objects clear of the moving door and feeder mechanism.</li>
+<li>Report damaged, wet, hot or loose equipment immediately. If there is an immediate electrical or fire danger, use the approved emergency power isolation method.</li>
+</ul>
+<p><strong>CAUTION</strong></p>
+<ul>
+<li>Do not unplug the Raspberry Pi, controllers, camera or network equipment.</li>
+<li>Do not move a sensor or camera. Movement can cause wrong readings or missed views.</li>
+<li>Do not repeatedly press a feeder control. A screen message that a command was <strong>Sent</strong> is not proof that the feeder moved.</li>
+<li>Do not treat an uncalibrated MQ-135 reading as an exact gas measurement.</li>
+</ul>
+<hr>
+<h1 class="">3. Know the equipment</h1>
+<table><thead><tr><th>Part</th><th>What it does</th><th>What you should do</th><th>What to avoid</th></tr></thead><tbody>
+<tr><td>Raspberry Pi 5 main unit</td><td>Runs the GoHMoTech server</td><td>Keep its enclosure dry, powered and ventilated</td><td>Do not unplug or cover ventilation</td></tr>
+<tr><td>ESP32 controller units</td><td>Read sensors and receive equipment commands</td><td>Report an offline/stale device</td><td>Do not open, rewire or reset without approval</td></tr>
+<tr><td>DHT21/AM2301</td><td>Measures air temperature (°C) and humidity (%)</td><td>Keep its area open to normal air</td><td>Do not wet, cover or move it</td></tr>
+<tr><td>LDR</td><td>Indicates indoor light level</td><td>Leave its view clear</td><td>Do not cover it</td></tr>
+<tr><td>Rain sensor</td><td>Shows rain detected or dry</td><td>Report damage or movement</td><td>Do not scrape or chemically clean it</td></tr>
+<tr><td>MQ-135</td><td>Shows a raw/relative air-quality signal; estimated PPM only after calibration</td><td>Watch for change and calibration label</td><td>Do not call it an exact safety gas meter</td></tr>
+<tr><td>Ultrasonic feed sensor</td><td>Measures distance to feed and reports an estimated percentage/weight</td><td>Keep the path clear and mounting fixed</td><td>Do not place feed/object directly against it</td></tr>
+<tr><td>Feeder servo/mechanism</td><td>Dispenses feed when controlled/scheduled</td><td>Keep clear and check the real result</td><td>Do not force moving parts or repeat commands blindly</td></tr>
+<tr><td>Door and light equipment</td><td>Opens/closes the door and switches light</td><td>Keep door path clear; check physical position</td><td>Do not work on relays or wiring</td></tr>
+<tr><td>Camera</td><td>Provides farm view and detection images</td><td>Keep the lens and view clear</td><td>Do not block or change angle</td></tr>
+<tr><td>Load-cell scale, when installed</td><td>Provides live goat weight for owner confirmation</td><td>Use a clear, stable platform; confirm before saving</td><td>Do not save an unstable reading</td></tr>
+<tr><td>BLE beacon/receiver, when installed</td><td>Shows nearby/proximity state for an assigned goat</td><td>Keep beacon securely attached</td><td>Do not treat it as GPS</td></tr>
+</tbody></table>
+<p><strong>[DEVICE PHOTO NEEDED: Farm Owner Equipment Overview]</strong></p>
+<p>Show only parts a Farm Owner may see or inspect safely. Highlight the closed main enclosure, controller enclosures, camera, sensor positions, feeder sensor and protected cables. <strong>Figure O-2. Equipment a Farm Owner should recognize.</strong></p>
+<p><strong>[Information Needed: Exact installed equipment positions and safe user-access boundaries]</strong></p>
+<hr>
+<h1 class="">4. One-page Quick Start</h1>
+<ol>
+<li>Look for wet equipment, damaged cables or blocked moving parts. Do not continue if unsafe.</li>
+<li>Confirm the system has been powered by the Administrator or authorized person.</li>
+<li>Connect your phone/computer to the required network, if the farm uses local access.</li>
+<li>Open <strong>[Information Needed: Production GoHMoTech URL/IP address]</strong>.</li>
+<li>Enter your username or email and password; select <strong>Sign in securely</strong>.</li>
+<li>On <strong>Overview</strong>, check Total goats, Current feed level, Temperature, Humidity, Device status, Security alerts, Recent detections and Notifications.</li>
+<li>Check the Environment &amp; goat house panel and the time of the latest data.</li>
+<li>Review Recent alerts. Open <strong>Monitoring → Security &amp; Alerts</strong> for details.</li>
+<li>If needed, open <strong>Farm → Manage Goats</strong>, <strong>Farm → Feeding</strong>, <strong>Monitoring → Farm Monitoring</strong> or <strong>Records → Reports</strong>.</li>
+<li>Select <strong>Logout</strong> when finished on a shared device.</li>
+</ol>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Farm Owner Dashboard]</strong></p>
+<p>Show the full Overview page. Highlight the summary cards, Environment &amp; goat house, Quick access, feeding schedule, recent goat activity, recent alerts, navigation and user menu. <strong>Figure O-3. Farm Owner Dashboard.</strong></p>
+<hr>
+<h1 class="">5. Starting, daily use and safe shutdown</h1>
+<h2 class="">5.1 Before the system is turned on</h2>
+<ol>
+<li>Check that enclosures are closed and dry.</li>
+<li>Look for cut, loose, chewed or overheated cables.</li>
+<li>Make sure goats cannot touch electronics or moving equipment.</li>
+<li>Make sure the camera view and sensor openings are clear.</li>
+<li>Make sure the door and feeder can move safely.</li>
+<li>Tell the Administrator about any problem. Farm Owners should not repair wiring.</li>
+</ol>
+<h2 class="">5.2 Power-on and first check</h2>
+<p>The Administrator or authorized operator should use the farm’s approved power sequence. Do not guess which plugs or switches to use.</p>
+<p>After power-on, open GoHMoTech and confirm that the Dashboard loads, device counts are reasonable and sensor times update. <strong>[Information Needed: Verified startup time and approved power switch/sequence]</strong></p>
+<p><strong>[DEVICE PHOTO NEEDED: GoHMoTech Powered On]</strong> — show only actual visible indicators and closed enclosures. <strong>Figure O-4. System powered on.</strong></p>
+<h2 class="">5.3 Normal daily operation</h2>
+<p>The controllers normally send sensor readings to the Raspberry Pi. The feeder unit reports feed information. The camera supplies views and detections. GoHMoTech records events, creates notifications and prepares reports. The system normally stays on; do not power-cycle it every day.</p>
+<h3 class="">Start of day</h3>
+<ul>
+<li>[ ] Open Overview and check the latest data.</li>
+<li>[ ] Check temperature, humidity and feed.</li>
+<li>[ ] Check device and camera status.</li>
+<li>[ ] Review unread notifications and important alerts.</li>
+<li>[ ] Inspect goats, feed and equipment in person.</li>
+</ul>
+<h3 class="">During the day</h3>
+<ul>
+<li>Respond to high/critical or unusual alerts.</li>
+<li>Check that readings continue to update.</li>
+<li>Confirm any door/light/feed command at the actual equipment.</li>
+<li>Review camera/security events when needed.</li>
+</ul>
+<h3 class="">End of day</h3>
+<ul>
+<li>Review alerts and goat records.</li>
+<li>Review the Daily Summary SMS if enabled by the Administrator.</li>
+<li>Generate a report if required.</li>
+<li>Log out on a shared device. Leave the system powered unless the Administrator has scheduled shutdown.</li>
+</ul>
+<h2 class="">5.4 Safe shutdown and restart</h2>
+<p>The inspected web portal has no Farm Owner shutdown or restart button. Do not pull the plug. Contact the Administrator, who must finish uploads/reports and use the approved Raspberry Pi operating-system shutdown/restart procedure.</p>
+<p><strong>WARNING:</strong> Sudden power removal may cause data loss or storage corruption.</p>
+<p><strong>[Information Needed: Administrator contact and emergency isolation procedure]</strong></p>
+<hr>
+<h1 class="">6. Login, Dashboard and navigation map</h1>
+<h2 class="">6.1 Login</h2>
+<ol>
+<li>Open the GoHMoTech address.</li>
+<li>Enter <strong>Username or email</strong>.</li>
+<li>Enter <strong>Password</strong>. The eye button shows/hides it.</li>
+<li>Select <strong>Sign in securely</strong>.</li>
+</ol>
+<p>Use <strong>Forgot password?</strong> if password reset has been configured. <strong>Continue with Google</strong> appears only when the Administrator has configured Google sign-in. If you see <strong>Access denied</strong> or an expected Farm menu is missing, ask the Administrator to check that your account belongs to <strong>Farm Owners</strong>.</p>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Login Page]</strong></p>
+<p>Highlight Username or email, Password, visibility button, Forgot password and Sign in securely. <strong>Figure O-5. Login page.</strong></p>
+<h2 class="">6.2 Dashboard meaning</h2>
+<p>The Dashboard answers: <strong>“What is happening on the farm right now?”</strong></p>
+<p>It shows Total goats, Current feed level, Temperature, Humidity, Device status, Security alerts, Recent detections and Notifications. It also shows a 3D Bahay ng Kambing, environment/equipment states, quick links, feeding schedules, recent goat activity and recent alerts.</p>
+<p><strong>NOTE:</strong> Recent detections means goats seen by detection in the recent window; it is not the official herd count. A device count such as 1/2 means one of two listed controllers is currently considered online.</p>
+<h2 class="">6.3 Farm Owner navigation map</h2>
+<pre><code>Farm Owner sign-in
+└── Overview
+    ├── Farm
+    │   ├── Manage Goats
+    │   ├── Feeding
+    │   ├── Farm Controls
+    │   ├── Marketplace
+    │   └── My Listings
+    ├── Monitoring
+    │   ├── Farm Monitoring
+    │   ├── Live Detection
+    │   ├── Goat Tracking
+    │   └── Security &amp; Alerts
+    ├── Records
+    │   ├── Reports
+    │   └── Detection History
+    ├── Device Status
+    ├── Help &amp; Settings
+    │   ├── Customer Service
+    │   ├── SMS Alerts
+    │   └── Inquiries
+    └── Logout</code></pre>
+<p>On a phone, the bottom bar shows <strong>Overview</strong>, <strong>Monitor</strong>, <strong>Herd</strong>, <strong>Operate</strong> and <strong>More</strong>. Select <strong>More</strong> for the complete menu.</p>
+<hr>
+<h1 class="">7. Complete Farm Owner menu guide</h1>
+<table><thead><tr><th>Menu</th><th>What it is for</th><th>Main actions</th></tr></thead><tbody>
+<tr><td>Overview</td><td>Current farm and equipment summary</td><td>Review status and use quick links</td></tr>
+<tr><td>Farm → Manage Goats</td><td>Herd list and details</td><td>Search, add/update goats, weights, health, vaccination, photos and BLE assignment</td></tr>
+<tr><td>Farm → Feeding</td><td>Opens the combined Farm Controls page</td><td>Review feeder status, controls and schedules supported there</td></tr>
+<tr><td>Farm → Farm Controls</td><td>Door, light, feeder, mode, schedules and rules</td><td>Send supervised commands; manage automation</td></tr>
+<tr><td>Farm → Marketplace</td><td>Browse goat listings</td><td>View listings</td></tr>
+<tr><td>Farm → My Listings</td><td>Owner marketplace listings</td><td>Manage the owner’s approved listings</td></tr>
+<tr><td>Monitoring → Farm Monitoring</td><td>Sensors, alerts, camera, equipment and devices</td><td>Check current system data</td></tr>
+<tr><td>Monitoring → Live Detection</td><td>Live goat-detection view</td><td>Review current camera detection</td></tr>
+<tr><td>Monitoring → Goat Tracking</td><td>BLE receiver/proximity view</td><td>Find an assigned goat near receivers</td></tr>
+<tr><td>Monitoring → Security &amp; Alerts</td><td>Notifications and person-detection records</td><td>Read, review and resolve events</td></tr>
+<tr><td>Records → Reports</td><td>Period reports and exports</td><td>Review history; create CSV/Excel/PDF</td></tr>
+<tr><td>Records → Detection History</td><td>Recorded goat detections</td><td>Review camera, time and detection data</td></tr>
+<tr><td>Device Status</td><td>Controller/device status and details</td><td>Check communication, alerts and recent data</td></tr>
+<tr><td>Help &amp; Settings → Customer Service</td><td>Support tickets</td><td>Ask for help and follow responses</td></tr>
+<tr><td>Help &amp; Settings → SMS Alerts</td><td>Your own mobile number registration</td><td>Save or pause registration</td></tr>
+<tr><td>Help &amp; Settings → Inquiries</td><td>Marketplace inquiries</td><td>Review messages/inquiries</td></tr>
+<tr><td>Bell</td><td>Opens Security &amp; Alerts</td><td>Review unread farm notifications</td></tr>
+<tr><td>User menu</td><td>SMS Registration and Logout</td><td>Account actions available to Farm Owner</td></tr>
+</tbody></table>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Farm Owner Navigation Menu]</strong> — show desktop groups and the mobile bottom bar in separate captures if needed. <strong>Figure O-6. Farm Owner navigation.</strong></p>
+<hr>
+<h1 class="">8. Environmental and feed monitoring</h1>
+<h2 class="">8.1 View current environmental data</h2>
+<p><strong>Navigation path:</strong> Monitoring → Farm Monitoring</p>
+<ol>
+<li>Find Temperature and Humidity and check the timestamp.</li>
+<li>Review indoor light, rain and MQ-135 values when present.</li>
+<li>Review active alerts and recent readings.</li>
+<li>If a value is blank, shown as <code>—</code>, or old, treat it as unavailable. Open <strong>Device Status</strong> or tell the Administrator.</li>
+</ol>
+<p>Temperature is in degrees Celsius. Humidity is relative humidity percent. Rain is a detected/dry state, not rainfall amount. Indoor light is a raw/calibrated indicator, not necessarily a certified lux value. MQ-135 PPM is meaningful only when the page/data says the sensor is calibrated.</p>
+<p><strong>[DEVICE PHOTO NEEDED: Environmental Sensor Installation]</strong></p>
+<p>Show DHT21, LDR, rain sensor and MQ-135 in their installed positions, without opening powered wiring. <strong>Figure O-7. Environmental sensors.</strong></p>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Environmental Monitoring Page]</strong></p>
+<p>Show current supported values, units, source/timestamps and alerts. <strong>Figure O-8. Environmental monitoring.</strong></p>
+<h2 class="">8.2 View feed status</h2>
+<p><strong>Navigation path:</strong> Overview or Farm → Feeding</p>
+<p>The ultrasonic sensor measures the distance to the feed surface. GoHMoTech shows an estimated feed percentage and grams based on the stored feeder capacity. A low-feed alert may be created when estimated grams fall below the configured threshold.</p>
+<p>If the screen looks wrong:</p>
+<ol>
+<li>Check the real feed level.</li>
+<li>Look for feed or an object blocking the sensor.</li>
+<li>Check whether the sensor or container moved.</li>
+<li>Check the update time and Device Status.</li>
+<li>Tell the Administrator if recalibration is needed.</li>
+</ol>
+<p><strong>[DEVICE PHOTO NEEDED: Feed Monitoring Sensor]</strong></p>
+<p>Show the feed container, ultrasonic sensor, fixed mount, cable and controller enclosure. <strong>Figure O-9. Feed monitoring unit.</strong></p>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Feed Monitoring Page]</strong></p>
+<p>Show feed level, update time, schedule/log areas and low warning if one is real. <strong>Figure O-10. Feed monitoring.</strong></p>
+<hr>
+<h1 class="">9. Goats, weighing and tracking</h1>
+<h2 class="">9.1 View or update goat information</h2>
+<p><strong>Navigation path:</strong> Farm → Manage Goats</p>
+<ol>
+<li>Search/filter for the goat.</li>
+<li>Select the goat to open details.</li>
+<li>Review ID/tag, name, breed, gender, birth date, current weight, status, health, vaccination, notes and photos.</li>
+<li>Update only from real farm records; select <strong>Save Changes</strong>.</li>
+</ol>
+<p>To add a goat, select <strong>Add Goat</strong>, complete the required real information and save. Implemented status values include Active, Sold, Dead and Missing.</p>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Goat List Page]</strong> — show search/filter, Add Goat and goat records. <strong>Figure O-11. Goat list.</strong></p>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Goat Details Page]</strong> — show basic, weight, BLE, health, vaccination, notes and gallery. <strong>Figure O-12. Goat details.</strong></p>
+<h2 class="">9.2 Save a weight</h2>
+<ol>
+<li>Open the goat’s details.</li>
+<li>Choose <strong>Auto / Live Scale</strong> when the installed scale is working, or <strong>Manual Entry</strong> for a verified manual value.</li>
+<li>For the scale, clear the platform, select <strong>Start Weighing</strong>, place the correct goat safely and wait for a stable reading.</li>
+<li>Select <strong>Save Weight</strong>.</li>
+<li>Check the confirmation, then save. The value appears in Weight History and updates current weight.</li>
+</ol>
+<p>Never save an unstable value or a weight belonging to a different goat.</p>
+<h2 class="">9.3 BLE goat tracking</h2>
+<p><strong>Navigation path:</strong> Monitoring → Goat Tracking</p>
+<p>BLE shows whether an assigned beacon is heard by farm receivers and a proximity class such as Very Near, Near or Out of Range. Use <strong>Find Goat</strong> and then physically search the indicated receiver area. BLE is not GPS and does not provide a map coordinate.</p>
+<hr>
+<h1 class="">10. Camera, security and notifications</h1>
+<h2 class="">10.1 Camera and Live Detection</h2>
+<p><strong>Navigation path:</strong> Monitoring → Farm Monitoring or Live Detection</p>
+<p>Use the live view to check the monitored area. Keep the lens clean and unblocked. Do not change the camera angle. Goat detection records a count/confidence from a frame; it is not the official inventory count.</p>
+<p><strong>[DEVICE PHOTO NEEDED: Camera Installation]</strong></p>
+<p>Show camera, stable mount, monitored area and protected cable. <strong>Figure O-13. Camera installation.</strong></p>
+<h2 class="">10.2 Review Security &amp; Alerts</h2>
+<p><strong>Navigation path:</strong> Monitoring → Security &amp; Alerts</p>
+<p>The page has Overview, Alerts and Security Detection tabs for Farm Owners.</p>
+<ol>
+<li>Check Unread notifications, Unresolved alerts, Critical unresolved and Unreviewed detections.</li>
+<li>In <strong>Alerts</strong>, filter by severity, type, status or date. You can use <strong>Mark all read</strong>, but reading does not resolve the problem.</li>
+<li>In <strong>Security Detection</strong>, inspect snapshot, source, time, confidence and review state.</li>
+<li>Open the record and record an honest review/result.</li>
+<li>Resolve an alert only after the cause has been handled.</li>
+</ol>
+<p>GoHMoTech may say Person Detected, Unknown Person or Face Detected, but it does not identify the person. A detected person must not automatically be called an intruder.</p>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Security Monitoring Page]</strong></p>
+<p>Show summary cards, Alerts filters/table and Security Detection filters/table. <strong>Figure O-14. Security and alerts.</strong></p>
+<h2 class="">10.3 Notification meanings</h2>
+<table><thead><tr><th>State</th><th>Meaning</th><th>What to do</th></tr></thead><tbody>
+<tr><td>Unread</td><td>Not yet opened/marked read</td><td>Review it</td></tr>
+<tr><td>Unresolved</td><td>Cause/action not closed</td><td>Investigate and act</td></tr>
+<tr><td>Critical/High</td><td>Important severity</td><td>Inspect promptly</td></tr>
+<tr><td>Medium/Low/Informational</td><td>Lower priority or information</td><td>Review in context</td></tr>
+<tr><td>Unreviewed detection</td><td>Camera record not checked</td><td>Inspect snapshot/time/source</td></tr>
+<tr><td>Dismissed / False Alarm</td><td>Reviewed and judged not a threat</td><td>Add truthful notes</td></tr>
+</tbody></table>
+<hr>
+<h1 class="">11. Farm controls and feeding</h1>
+<h2 class="">11.1 Send a control command</h2>
+<p><strong>Navigation path:</strong> Farm → Farm Controls</p>
+<p>The page has Door Motor, Light Relay and Servo Feeder controls, Automation mode, schedules, sensor rules and Recent actuator activity.</p>
+<ol>
+<li>Check that people, goats and objects are clear.</li>
+<li>Check whether the controller is online.</li>
+<li>Select the required door, light or feeder action once.</li>
+<li>Read the result:</li>
+</ol>
+<ul>
+<li><strong>Sent to device:</strong> the command was stored while the device was online.</li>
+<li><strong>Queued — device offline:</strong> the device may act after reconnecting.</li>
+<li><strong>Failed:</strong> the command did not complete.</li>
+</ul>
+<ol>
+<li>Look at the actual equipment to confirm the result.</li>
+</ol>
+<p><strong>WARNING:</strong> Current hardware does not send positive execution acknowledgement. Do not repeat a feeder command simply because the screen does not say “completed.”</p>
+<h2 class="">11.2 Schedules and automation</h2>
+<p>Use <strong>Add schedule</strong> to create door, light or feeder times and days supported by the page. Use <strong>Pause/Resume</strong> for a temporary change. Use <strong>Delete schedule</strong> only after checking the exact item. <strong>Automatic</strong> mode allows active rules/schedules; <strong>Manual</strong> means the page’s manual controls take effect according to the displayed explanation.</p>
+<hr>
+<h1 class="">12. Reports and PDF generation</h1>
+<p>Reports answer: <strong>“What happened on the farm during a selected period?”</strong></p>
+<p><strong>Navigation path:</strong> Records → Reports</p>
+<p>The Report Center provides Goat Inventory, Vaccination, Health, Weight, Feeder, Door, Lighting, Environmental, AI Detection Activity, Security and Marketplace reports. Period choices are Today, Last 7 days, Last 30 days, This month and Custom.</p>
+<h2 class="">12.1 Generate a combined Farm PDF</h2>
+<ol>
+<li>Select a period; enter both dates for Custom.</li>
+<li>Select <strong>Apply period</strong>.</li>
+<li>Review summary cards and important events.</li>
+<li>Select <strong>Generate Farm PDF</strong>.</li>
+<li>In the browser print page, choose Print, then <strong>Save as PDF</strong> or a printer.</li>
+</ol>
+<h2 class="">12.2 Generate a detailed report</h2>
+<ol>
+<li>Open a report card.</li>
+<li>Choose the available filters and select <strong>Apply</strong>.</li>
+<li>Review summaries, charts and source table.</li>
+<li>Select <strong>CSV</strong>, <strong>Excel</strong> or <strong>Generate PDF / Print</strong>.</li>
+<li>For PDF, use the browser’s <strong>Save as PDF</strong> option.</li>
+</ol>
+<p>The PDF is a print view; GoHMoTech does not directly download a ready-made PDF file. Environmental reports include temperature, humidity, indoor light, rain and MQ-135 information.</p>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: Reports Page]</strong></p>
+<p>Show period controls, Generate Farm PDF, summary cards, report cards and important events. <strong>Figure O-15. Report Center.</strong></p>
+<p><strong>[SYSTEM SCREENSHOT NEEDED: PDF Generation Button and Example PDF]</strong></p>
+<p>Show Generate PDF / Print and a redacted browser print/PDF result. <strong>Figure O-16. PDF report generation.</strong></p>
+<hr>
+<h1 class="">13. SMS Alerts, account and logout</h1>
+<h2 class="">13.1 Register your mobile number</h2>
+<p><strong>Navigation path:</strong> Help &amp; Settings → SMS Alerts</p>
+<ol>
+<li>Open <strong>Register your mobile number</strong>.</li>
+<li>Enter your own Philippine mobile number in the accepted format.</li>
+<li>Set the active/paused choice shown by the form.</li>
+<li>Select <strong>Save SMS registration</strong>.</li>
+<li>Check <strong>Current status</strong> and Last updated.</li>
+</ol>
+<p>This registration is your personal account number. The Administrator separately controls the system-wide SMS recipient, alerts, reminders and Daily Summary. Contact the Administrator if expected SMS is not sent.</p>
+<h2 class="">13.2 Theme and account menu</h2>
+<p>The sun/moon button changes the display theme on the current browser. The Farm Owner user menu contains <strong>SMS Registration</strong> and <strong>Logout</strong>. The portal navigation does not expose a separate Farm Owner profile-edit page; use <strong>Forgot password?</strong> at login when reset is configured, or contact the Administrator.</p>
+<h2 class="">13.3 Logout</h2>
+<p>Select <strong>Logout</strong> in the sidebar or user menu. Always log out on a shared phone or computer.</p>
+<hr>
+<h1 class="">14. Basic maintenance and cleaning</h1>
+<table><thead><tr><th>Interval</th><th>Farm Owner task</th></tr></thead><tbody>
+<tr><td>Daily</td><td>Check Dashboard/data times, real feed, camera view, alerts and safe door/feeder area</td></tr>
+<tr><td>Weekly</td><td>Look for visible cable/mount damage; clean camera lens carefully; check feed sensor path; report problems</td></tr>
+<tr><td>Monthly</td><td>Ask Administrator to review device reliability, enclosures, storage/backups and account access</td></tr>
+</tbody></table>
+<p>For cleaning, use a clean dry cloth only on safe external surfaces. Do not spray water or chemicals. Do not open enclosures, move sensors, scrape the rain plate, touch the MQ-135, or push an ultrasonic transducer. The Administrator must shut down/isolate equipment before any physical work that could touch wiring.</p>
+<hr>
+<h1 class="">15. Troubleshooting</h1>
+<table><thead><tr><th>Problem</th><th>What it may mean</th><th>What the Farm Owner should do</th></tr></thead><tbody>
+<tr><td>Page does not load</td><td>Network or server unavailable</td><td>Check your network/address, refresh once, then contact Administrator</td></tr>
+<tr><td>Login fails</td><td>Wrong password, inactive account or wrong role</td><td>Re-enter carefully; use Forgot password; contact Administrator</td></tr>
+<tr><td>Menu is missing</td><td>Account permission/role</td><td>Ask Administrator to check Farm Owners group</td></tr>
+<tr><td>Data is old/not updating</td><td>Device or network stopped</td><td>Check timestamp and Device Status; inspect farm directly; report it</td></tr>
+<tr><td>No reading / <code>—</code></td><td>No confirmed data</td><td>Do not assume normal; check real conditions and report it</td></tr>
+<tr><td>Feed value looks wrong</td><td>Sensor blocked/moved or needs calibration</td><td>Check real feed and sensor path; do not move it; tell Administrator</td></tr>
+<tr><td>Device says offline/check device</td><td>Controller has no recent activity</td><td>Do not rewire; report device/location</td></tr>
+<tr><td>Command says Queued</td><td>Controller offline</td><td>Stop; tell Administrator; supervise possible action after reconnection</td></tr>
+<tr><td>Command says Sent but equipment did not move</td><td>No execution acknowledgement or equipment fault</td><td>Inspect safely; do not repeat feeder blindly; contact Administrator</td></tr>
+<tr><td>Camera unavailable</td><td>Power/network/camera problem</td><td>Check whether view is blocked; contact Administrator</td></tr>
+<tr><td>Person detection seems wrong</td><td>Detection can make mistakes</td><td>Review image/time; dismiss truthfully if false; do not identify a person from it</td></tr>
+<tr><td>No SMS</td><td>Registration, global setting, provider or scheduler issue</td><td>Check your registration status; contact Administrator</td></tr>
+<tr><td>Daily Summary missing</td><td>Not enabled/due or system send failed</td><td>Contact Administrator to check diagnostics</td></tr>
+<tr><td>Report is empty</td><td>No data or wrong period/filter</td><td>Change period/filter; check whether devices recorded data</td></tr>
+<tr><td>PDF does not download</td><td>Browser print method is used</td><td>Select Generate PDF / Print, then Save as PDF</td></tr>
+<tr><td>System unresponsive</td><td>Pi/network/service fault</td><td>Contact Administrator; do not unplug unless immediate safety requires approved emergency isolation</td></tr>
+</tbody></table>
+<hr>
+<h1 class="">16. Quick-reference card, do’s and don’ts, glossary</h1>
+<h2 class="">16.1 Quick troubleshooting card</h2>
+<p><strong>No Dashboard?</strong> → Check network/address; contact Administrator. <strong>No sensor data?</strong> → Check timestamp and Device Status; inspect real farm conditions. <strong>No feed data?</strong> → Check real feed and sensor path; report it. <strong>No camera?</strong> → Check for a blocked view; contact Administrator. <strong>No SMS?</strong> → Check SMS registration; contact Administrator. <strong>Daily Summary missing?</strong> → Ask Administrator to check its last run. <strong>System unresponsive?</strong> → Do not unplug; call the Administrator unless there is an immediate safety danger.</p>
+<h2 class="">16.2 Farm Owner do’s and don’ts</h2>
+<p><strong>DO</strong></p>
+<ul>
+<li>Check the real animals, feed and equipment.</li>
+<li>Review alerts and current data times.</li>
+<li>Check feed level and environmental readings.</li>
+<li>Confirm equipment movement physically.</li>
+<li>Report device problems promptly.</li>
+<li>Keep your password private and log out on shared devices.</li>
+</ul>
+<p><strong>DON’T</strong></p>
+<ul>
+<li>Move sensors or block the camera.</li>
+<li>Disconnect cables or power.</li>
+<li>Repeat feeder commands without checking.</li>
+<li>Assume missing data means normal conditions.</li>
+<li>Treat BLE as GPS or camera detection as official herd count.</li>
+<li>Call a detected person an intruder without review.</li>
+<li>Share your password.</li>
+</ul>
+<h2 class="">16.3 Button and status reference</h2>
+<table><thead><tr><th>Control/status</th><th>Meaning</th></tr></thead><tbody>
+<tr><td>Add Goat</td><td>Create a new goat record</td></tr>
+<tr><td>Save Changes / Save Weight</td><td>Store reviewed information</td></tr>
+<tr><td>Filter / Apply</td><td>Show records matching choices</td></tr>
+<tr><td>Bell</td><td>Open notifications/security</td></tr>
+<tr><td>Menu / More</td><td>Open full navigation</td></tr>
+<tr><td>Sun/Moon</td><td>Change display theme</td></tr>
+<tr><td>Generate Farm PDF</td><td>Open combined print view</td></tr>
+<tr><td>Generate PDF / Print</td><td>Open report print view</td></tr>
+<tr><td>Online</td><td>Recent communication meets the system rule</td></tr>
+<tr><td>Offline / Check device</td><td>Communication needs checking</td></tr>
+<tr><td>Sent</td><td>Command delivered/stored; not physical confirmation</td></tr>
+<tr><td>Queued</td><td>Device was offline and may act after reconnecting</td></tr>
+<tr><td>Unread / Unresolved</td><td>Needs review / cause not closed</td></tr>
+<tr><td>Logout</td><td>End your session</td></tr>
+</tbody></table>
+<h2 class="">16.4 Glossary</h2>
+<p><strong>Alert</strong> — Message that something may need attention. <strong>BLE</strong> — Short-range nearby/proximity tracking; not GPS. <strong>Dashboard/Overview</strong> — Main page showing current farm information. <strong>Daily Summary</strong> — Scheduled SMS digest controlled by the Administrator. <strong>Environmental reading</strong> — Measurement from a supported sensor. <strong>ESP32</strong> — Small controller that collects data or receives equipment commands. <strong>Feed monitoring</strong> — Estimate based on the ultrasonic distance to feed. <strong>Notification</strong> — Information or alert in the Security inbox. <strong>PDF report</strong> — Browser print page saved as a PDF file. <strong>Raspberry Pi</strong> — Main computer/server of GoHMoTech. <strong>Security detection</strong> — Camera event showing a person/face category; not identity recognition. <strong>Sent/Queued</strong> — Command delivery state, not proof that equipment moved.</p>
+<hr>
+<h1 class="">Appendix A. Photo and screenshot plan</h1>
+<table><thead><tr><th>Figure</th><th>Required image</th><th>Important areas</th></tr></thead><tbody>
+<tr><td>O-1</td><td>Complete system</td><td>Main unit, controllers, sensors, feed and camera</td></tr>
+<tr><td>O-2</td><td>Equipment overview</td><td>Safe owner-visible parts and boundaries</td></tr>
+<tr><td>O-3</td><td>Farm Owner Dashboard</td><td>Summary, environment, quick links, schedules, alerts</td></tr>
+<tr><td>O-4</td><td>Powered system</td><td>Real indicators only</td></tr>
+<tr><td>O-5</td><td>Login</td><td>Username/email, password, eye, sign-in</td></tr>
+<tr><td>O-6</td><td>Owner navigation</td><td>Desktop groups and mobile bar</td></tr>
+<tr><td>O-7/O-8</td><td>Environmental installation/page</td><td>Sensor positions; values, units and times</td></tr>
+<tr><td>O-9/O-10</td><td>Feed unit/page</td><td>Ultrasonic mount; feed data and warning</td></tr>
+<tr><td>O-11/O-12</td><td>Goat list/details</td><td>Search/add; weight, health, vaccination and photos</td></tr>
+<tr><td>O-13/O-14</td><td>Camera/security</td><td>View/mount; alert and detection review</td></tr>
+<tr><td>O-15/O-16</td><td>Reports/PDF</td><td>Period, report cards and browser print flow</td></tr>
+</tbody></table>
+<p>This manual deliberately excludes unsupported sensors, Administrator-only model upload, global SMS configuration, user/device administration, private credentials and unconfirmed physical ratings/LED meanings.</p>
+<p><strong>End of Goat Owner / Farm Owner User Manual</strong></p></body></html>

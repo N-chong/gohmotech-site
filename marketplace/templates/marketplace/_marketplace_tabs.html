@@ -1,0 +1,10 @@
+{% if user.is_authenticated %}<nav class="marketplace-tabs" aria-label="Marketplace sections">
+  <a href="{% url 'marketplace:list' %}" {% if request.resolver_match.url_name == 'list' or request.resolver_match.url_name == 'detail' %}class="active" aria-current="page"{% endif %}><i class="bi bi-grid"></i> Browse</a>
+  {% if user.is_authenticated and not user.is_staff %}
+    {% if is_approved_seller %}<a href="{% url 'marketplace:seller_listings' %}" {% if request.resolver_match.url_name == 'seller_listings' or request.resolver_match.url_name == 'seller_listing_add' or request.resolver_match.url_name == 'seller_listing_edit' %}class="active" aria-current="page"{% endif %}><i class="bi bi-shop-window"></i> My Listings</a>{% endif %}
+    <a href="{% url 'marketplace:my_inquiries' %}" {% if request.resolver_match.url_name == 'my_inquiries' or request.resolver_match.url_name == 'conversation' %}class="active" aria-current="page"{% endif %}><i class="bi bi-chat-dots"></i> My Inquiries</a>
+    <a href="{% url 'marketplace:buyer_reservations' %}" {% if request.resolver_match.url_name == 'buyer_reservations' or request.resolver_match.url_name == 'pickup' %}class="active" aria-current="page"{% endif %}><i class="bi bi-bookmark-check"></i> My Reservations</a>
+  {% elif user.is_staff %}
+    <a href="{% url 'marketplace:admin_dashboard' %}" {% if request.resolver_match.url_name == 'admin_dashboard' %}class="active" aria-current="page"{% endif %}><i class="bi bi-gear"></i> Manage</a>
+  {% endif %}
+</nav>{% endif %}

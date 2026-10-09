@@ -5,27 +5,29 @@
 <section class="home-hero">
   <div class="store-container hero-grid">
     <div class="hero-copy">
-      <span class="eyebrow"><i class="bi bi-patch-check-fill"></i> Trusted community livestock</span>
-      <h1>A better way to find your <em>next goat.</em></h1>
-      <p>Discover goats from approved local sellers, compare clear livestock information, and speak directly with the owner before arranging pickup.</p>
+      <span class="eyebrow"><i class="bi bi-patch-check-fill"></i> GoHMoTech community marketplace</span>
+      <h1>Find your next goat, <em>close to home.</em></h1>
+      <p>Browse goats from approved local sellers, compare clear livestock records, and coordinate directly with the owner for farm pickup.</p>
       <form class="hero-search" method="get" action="{% url 'marketplace:list' %}">
         <i class="bi bi-search" aria-hidden="true"></i>
         <label class="visually-hidden" for="home-goat-search">Search marketplace goats</label>
         <input id="home-goat-search" name="q" type="search" placeholder="Search by breed, tag, farm, or location" autocomplete="off">
         <button type="submit">Search goats <i class="bi bi-arrow-right"></i></button>
       </form>
-      <div class="hero-actions"><a class="button button-primary button-large" href="{% url 'marketplace:list' %}">Explore all goats <i class="bi bi-arrow-right"></i></a><a class="text-link" href="#how-it-works">How buying works <i class="bi bi-arrow-down"></i></a></div>
+      <div class="hero-actions"><a class="button button-primary button-large" href="{% url 'marketplace:list' %}">Browse marketplace <i class="bi bi-arrow-right"></i></a>{% if is_approved_seller %}<a class="button button-cream button-large" href="{% url 'marketplace:seller_listing_add' %}"><i class="bi bi-plus-lg"></i> Post listing</a>{% else %}<a class="text-link" href="#how-it-works">How buying works <i class="bi bi-arrow-down"></i></a>{% endif %}</div>
       <div class="hero-proof"><div><span class="proof-icon"><i class="bi bi-house-heart"></i></span><span><strong>{{ available_count }}</strong><small>Available goats</small></span></div><div><span class="proof-icon"><i class="bi bi-patch-check"></i></span><span><strong>{{ seller_count }}</strong><small>Approved seller{{ seller_count|pluralize }}</small></span></div><div><span class="proof-icon"><i class="bi bi-geo-alt"></i></span><span><strong>Local</strong><small>Pickup arranged</small></span></div></div>
     </div>
-    <div class="hero-visual">
+    <div class="hero-visual marketplace-hero-art" role="img" aria-label="Goat farm marketplace at sunrise">
       {% with feature=featured_listings.0 %}
-      <div class="hero-image-frame">{% if feature and feature.display_image %}<img src="{{ feature.display_image.image.url }}" alt="Featured goat {{ feature.goat.goat_id }}" fetchpriority="high" decoding="async">{% else %}<div class="hero-placeholder"><img class="hero-brand-logo" src="{% static 'images/gohmotech-logo.png' %}" alt="GoHMoTech logo"><span>Goats from approved local sellers</span></div>{% endif %}</div>
+      <span class="hero-brand-seal"><img src="{% static 'images/gohmotech-logo.png' %}" alt=""><span><strong>GoHMoTech</strong><small>Local farm marketplace</small></span></span>
       <div class="hero-trust-badge"><i class="bi bi-shield-check"></i><span><strong>Buy with confidence</strong><small>Approved sellers and clear records</small></span></div>
       {% if feature %}<a class="floating-product" href="{% url 'marketplace:detail' feature.pk %}"><span class="live-dot"></span><div><small>Featured goat</small><strong>{{ feature.goat.goat_id }} · {{ feature.goat.get_breed_display }}</strong></div><b>PHP {{ feature.price|floatformat:0 }}</b></a>{% endif %}
       {% endwith %}
     </div>
   </div>
 </section>
+
+<div class="store-container marketplace-tabs-wrap">{% include "marketplace/_marketplace_tabs.html" %}</div>
 
 <section class="home-assurance" aria-label="Marketplace assurances"><div class="store-container assurance-grid">
   <div><i class="bi bi-patch-check-fill"></i><span><strong>Approved sellers</strong><small>Profiles reviewed by GoHMoTech</small></span></div>
@@ -38,6 +40,13 @@
   <div class="section-heading"><div><span class="section-kicker">Community marketplace</span><h2>Goats ready for a new home</h2><p>Every listing belongs to an administrator-approved seller and a clearly owned goat record.</p></div><a class="text-link" href="{% url 'marketplace:list' %}">View all goats <i class="bi bi-arrow-right"></i></a></div>
   <div class="product-grid product-grid-featured">
     {% for listing in featured_listings %}{% include "marketplace/product_card.html" with eager=forloop.first %}{% empty %}<div class="empty-store"><i class="bi bi-house-heart"></i><h3>New goats are coming soon</h3><p>No approved seller has a published goat at the moment. Please check again later.</p></div>{% endfor %}
+  </div>
+</section>
+
+<section class="marketplace-story" aria-label="GoHMoTech farm marketplace">
+  <div class="store-container marketplace-story-grid">
+    <article class="marketplace-story-banner"><div><span class="section-kicker light">Rooted in local agriculture</span><h2>A marketplace shaped around real farms.</h2><p>Discover trusted livestock information, speak with the seller, and arrange a pickup that works for both sides.</p><a class="button button-light" href="{% url 'marketplace:list' %}">Explore available goats</a></div></article>
+    <article class="marketplace-story-feature"><img src="{% static 'gohmotech/marketplace/featured/05_marketplace_dairy_feature.png' %}" alt="Goat dairy products and farm produce" loading="lazy" decoding="async" width="1254" height="1254"><div><span class="section-kicker">Farm community</span><h3>Healthy herds, thriving communities</h3><p>GoHMoTech brings clear livestock records and local connections into one friendly marketplace.</p></div></article>
   </div>
 </section>
 

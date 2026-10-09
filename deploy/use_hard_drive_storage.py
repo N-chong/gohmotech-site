@@ -66,6 +66,7 @@ TARGETS = (
     Target(PROJECT / "media", "development/media"),
     Target(PROJECT / "protected_media", "development/protected_media"),
     Target(PROJECT / "private_support_uploads", "development/private_support_uploads"),
+    Target(PROJECT / "private_inquiry_uploads", "development/private_inquiry_uploads"),
     Target(PROJECT / "staticfiles", "development/staticfiles"),
 )
 

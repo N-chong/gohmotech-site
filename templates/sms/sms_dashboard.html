@@ -5,7 +5,6 @@
 {% block header_title %}SMS Notifications{% endblock %}
 
 {% block extra_css %}
-<style>
     .sms-tabs .nav-link { color: var(--text-secondary); font-weight: 600; }
     .sms-tabs .nav-link.active { color: var(--text-primary); }
     .sms-card {
@@ -16,8 +15,16 @@
     .badge-status-sent { background:#16a34a; }
     .badge-status-failed { background:#b91c1c; }
     .badge-status-pending { background:#a16207; }
+    .badge-status-sending, .badge-status-processing { background:#0369a1; }
+    .badge-status-skipped { background:#6b7280; }
     .form-label.small { font-weight:600; color: var(--text-secondary); }
-</style>
+    .recipient-list { display:grid; gap:.6rem; }
+    .recipient-option { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:.75rem; align-items:center; padding:.75rem; border:1px solid var(--border-color); border-radius:.75rem; background:var(--card-bg-subtle); }
+    .recipient-option strong, .recipient-option small { display:block; }
+    .recipient-option small { color:var(--text-secondary); font-size:.75rem; }
+    .recipient-option .number { color:var(--text-primary); font-size:.8rem; font-weight:700; white-space:nowrap; }
+    .recipient-option.unavailable { opacity:.58; }
+    @media(max-width:520px) { .recipient-option { grid-template-columns:auto minmax(0,1fr); }.recipient-option .number { grid-column:2; } }
 {% endblock %}
 
 {% block content %}
@@ -47,6 +54,19 @@
         </div>
     </div>
 
+    <div class="sms-card mb-3" id="smsDiagnostics" aria-live="polite">
+        <h6 class="mb-3">System diagnostics</h6>
+        <div class="row g-2 sms-muted">
+            <div class="col-md-4"><strong>SMS service:</strong> <span id="diagService">Checking…</span></div>
+            <div class="col-md-4"><strong>Daily Summary:</strong> <span id="diagDaily">Checking…</span></div>
+            <div class="col-md-4"><strong>Scheduled time:</strong> <span id="diagTime">—</span></div>
+            <div class="col-md-4"><strong>Last attempt:</strong> <span id="diagLast">No attempts recorded</span></div>
+            <div class="col-md-4"><strong>Result:</strong> <span id="diagResult">—</span></div>
+            <div class="col-md-4"><strong>Next run:</strong> <span id="diagNext">—</span></div>
+            <div class="col-12"><strong>Last error:</strong> <span id="diagError">None</span></div>
+        </div>
+    </div>
+
     <!-- Tabs -->
     <ul class="nav nav-tabs sms-tabs mb-3" id="smsTab" role="tablist">
         <li class="nav-item" role="presentation">
@@ -73,8 +93,8 @@
 
         <!-- ===== Settings ===== -->
         <div class="tab-pane fade show active" id="pane-settings" role="tabpanel">
-            {% if not request.user.is_staff %}
-            <p class="sms-muted">You can view SMS settings, but only staff may change them.</p>
+            {% if not can_manage_sms %}
+            <p class="sms-muted">You can view SMS settings, but only farm owners and administrators may change them.</p>
             {% endif %}
             <div class="row g-3">
                 <div class="col-lg-6">
@@ -88,9 +108,10 @@
                             </label>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small" for="sRecipient">Recipient number (PH format)</label>
+                            <label class="form-label small" for="sRecipient">Fallback recipient number (PH format)</label>
                             <input type="text" class="form-control" id="sRecipient"
                                    value="{{ config.recipient_number }}" placeholder="09171234567">
+                            <div class="sms-muted mt-1">Used for daily summaries and reminders, and for farm alerts when no managed alert recipient is selected.</div>
                         </div>
                     </div>
 
@@ -127,7 +148,7 @@
                             <input class="form-check-input" type="checkbox" id="sAlertsEnabled"
                                    {% if config.alerts_enabled %}checked{% endif %}>
                             <label class="form-check-label" for="sAlertsEnabled">
-                                Text me when important alerts are raised
+                                Send SMS when important alerts are raised
                             </label>
                         </div>
                         <div class="mb-3">
@@ -158,7 +179,39 @@
                         </div>
                     </div>
 
-                    {% if request.user.is_staff %}
+                    {% if can_manage_alert_recipients %}
+                    <form class="sms-card mt-3" method="post" action="{% url 'sms:alert_recipients' %}">
+                        {% csrf_token %}
+                        <div class="d-flex justify-content-between align-items-start gap-2 mb-3">
+                            <div>
+                                <h6 class="mb-1">Farm alert recipients</h6>
+                                <p class="sms-muted mb-0">Choose which registered numbers receive missing-goat, security, and device-alert messages.</p>
+                            </div>
+                            <span class="badge bg-primary">Admin only</span>
+                        </div>
+                        {% if alert_recipient_registrations %}
+                        <div class="recipient-list">
+                            {% for registration in alert_recipient_registrations %}
+                            <label class="recipient-option {% if not registration.is_active or not registration.user.is_active %}unavailable{% endif %}">
+                                <input class="form-check-input mt-0" type="checkbox" name="recipient_ids" value="{{ registration.pk }}"
+                                       {% if registration.receives_farm_alerts %}checked{% endif %}
+                                       {% if not registration.is_active or not registration.user.is_active %}disabled{% endif %}>
+                                <span>
+                                    <strong>{{ registration.user.get_full_name|default:registration.user.username }}</strong>
+                                    <small>{{ registration.user.email|default:"No email" }}{% if not registration.is_active %} · SMS registration paused{% elif not registration.user.is_active %} · Account inactive{% endif %}</small>
+                                </span>
+                                <span class="number">{{ registration.phone_number }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        <button class="btn btn-primary btn-sm mt-3" type="submit">Save alert recipients</button>
+                        {% else %}
+                        <div class="alert alert-light border mb-0">No users have registered a mobile number yet. The fallback number above will continue receiving farm alerts.</div>
+                        {% endif %}
+                    </form>
+                    {% endif %}
+
+                    {% if can_manage_sms %}
                     <div class="sms-card mt-3">
                         <h6 class="mb-2">Test SMS</h6>
                         <p class="sms-muted">Sends a test message (works even while the master switch is off).</p>
@@ -173,7 +226,7 @@
                 </div>
             </div>
 
-            {% if request.user.is_staff %}
+            {% if can_manage_sms %}
             <div class="mt-3">
                 <button class="btn btn-primary" id="saveSettings">Save settings</button>
                 <span class="sms-muted ms-2" id="settingsMsg"></span>
@@ -183,7 +236,7 @@
 
         <!-- ===== Reminders ===== -->
         <div class="tab-pane fade" id="pane-reminders" role="tabpanel">
-            {% if request.user.is_staff %}
+            {% if can_manage_sms %}
             <div class="sms-card mb-3">
                 <h6 class="mb-3" id="reminderFormTitle">Add reminder</h6>
                 <form id="reminderForm" class="row g-2">
@@ -315,9 +368,10 @@ const CSRF = '{{ csrf_token }}';
 const SETTINGS_API = '/sms/api/settings/';
 const TEST_API = '/sms/api/test/';
 const BALANCE_API = '/sms/api/balance/';
+const DIAGNOSTICS_API = '/sms/api/diagnostics/';
 const REMINDER_API = '/sms/api/reminders/';
 const LOG_API = '/sms/api/logs/';
-const IS_STAFF = {{ request.user.is_staff|yesno:"true,false" }};
+const IS_STAFF = {{ can_manage_sms|yesno:"true,false" }};
 const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 function req(url, method, body) {
@@ -335,7 +389,33 @@ function esc(s) {
 function fmtDate(iso) {
     if (!iso) return '';
     const d = new Date(iso);
-    return d.toLocaleString('en-US', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+    return d.toLocaleString('en-US', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', timeZone:'Asia/Manila'});
+}
+
+function loadDiagnostics() {
+    fetch(DIAGNOSTICS_API, {headers: {'Accept': 'application/json'}})
+        .then(r => {
+            if (!r.ok) throw new Error('status unavailable');
+            return r.json();
+        })
+        .then(d => {
+            document.getElementById('diagService').textContent =
+                `${d.sms_service} — ${d.sms_service_detail}`;
+            document.getElementById('diagDaily').textContent =
+                d.daily_enabled ? (d.sms_enabled ? 'Enabled' : 'Blocked by SMS master switch') : 'Disabled';
+            document.getElementById('diagTime').textContent = `${d.scheduled_time} (${d.timezone})`;
+            document.getElementById('diagLast').textContent = d.last_run
+                ? (d.last_run.executed_at ? fmtDate(d.last_run.executed_at) : fmtDate(d.last_run.scheduled_for))
+                : 'No attempts recorded';
+            document.getElementById('diagResult').textContent = d.last_run ? d.last_run.status : '—';
+            document.getElementById('diagNext').textContent = d.next_scheduled_run
+                ? fmtDate(d.next_scheduled_run) : 'Disabled';
+            document.getElementById('diagError').textContent =
+                d.last_run && d.last_run.error ? d.last_run.error : 'None';
+        })
+        .catch(() => {
+            document.getElementById('diagService').textContent = 'Unable to retrieve diagnostics';
+        });
 }
 
 /* ---------------- Settings ---------------- */
@@ -359,6 +439,7 @@ function saveSettings() {
         .then(r => r.json().then(d => ({ok: r.ok, d})))
         .then(({ok, d}) => {
             msg.textContent = ok ? 'Saved.' : (JSON.stringify(d) || 'Save failed');
+            if (ok) loadDiagnostics();
         })
         .catch(() => { msg.textContent = 'Save failed'; });
 }
@@ -390,8 +471,9 @@ function sendTest() {
             if (!ok) { res.textContent = 'Failed: ' + JSON.stringify(d); return; }
             const log = d.log;
             if (log) {
-                res.textContent = `Test ${log.status} to ${log.recipient || '(none)'}`
-                    + (log.error_message ? ' — ' + log.error_message : '');
+                res.textContent = log.status === 'sent'
+                    ? 'Test SMS sent successfully.'
+                    : `Test SMS failed: ${log.error_message || 'SMS service unavailable.'}`;
             } else {
                 res.textContent = d.result || 'Done';
             }
@@ -548,6 +630,7 @@ function loadLogs(url) {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+    loadDiagnostics();
     const loaded = {};
     function ensure(name, fn) { if (!loaded[name]) { loaded[name] = true; fn(); } }
     document.getElementById('tab-reminders').addEventListener('shown.bs.tab', () => ensure('rem', loadReminders));

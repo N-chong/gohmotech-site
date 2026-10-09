@@ -113,6 +113,22 @@
     .owner-stat-value { margin-top: 14px; color: var(--text-primary); font-size: 1.8rem; font-weight: 750; line-height: 1; }
     .owner-stat-label { margin-top: 6px; color: var(--text-secondary); font-size: .82rem; font-weight: 600; }
     .owner-stat-meta { margin-top: 7px; color: var(--text-tertiary); font-size: .74rem; }
+    .owner-weather-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+    }
+    .owner-weather-item {
+        padding: 16px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--card-bg-subtle);
+        text-align: center;
+    }
+    .owner-weather-item i { color: var(--primary-600); font-size: 1.25rem; }
+    .owner-weather-value { margin-top: 7px; color: var(--text-primary); font-size: 1.25rem; font-weight: 750; }
+    .owner-weather-label { margin-top: 3px; color: var(--text-tertiary); font-size: .74rem; }
+    .owner-weather-note { margin: 12px 0 0; color: var(--text-tertiary); font-size: .74rem; }
     .owner-columns { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, .75fr); gap: 16px; }
     .owner-panel { padding: 18px; }
     .status-list { display: grid; gap: 2px; }
@@ -322,6 +338,7 @@
         .owner-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
         .owner-stat { padding: 14px; }
         .owner-stat-value { font-size: 1.45rem; }
+        .owner-weather-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .quick-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         #canvas-container-3d { height: 430px; }
         .goat-house-card-header small { display: none; }
@@ -368,23 +385,63 @@
                 <div class="owner-stat-meta">All registered farm goats</div>
             </article>
             <article class="owner-stat">
-                <div class="owner-stat-top"><span class="owner-stat-icon"><i class="bi bi-check-circle-fill"></i></span></div>
-                <div class="owner-stat-value">{{ active_goats }}</div>
-                <div class="owner-stat-label">Active goats</div>
-                <div class="owner-stat-meta">{{ healthy_goats }} currently healthy</div>
+                <div class="owner-stat-top"><span class="owner-stat-icon {% if feed_level_percent < 20 %}danger{% elif feed_level_percent < 40 %}warning{% endif %}"><i class="bi bi-bucket-fill"></i></span></div>
+                <div class="owner-stat-value">{{ feed_level_percent }}%</div>
+                <div class="owner-stat-label">Current feed level</div>
+                <div class="owner-stat-meta">{{ total_feed_grams|floatformat:0 }}g available</div>
             </article>
             <article class="owner-stat">
-                <div class="owner-stat-top"><span class="owner-stat-icon {% if missing_goats_count %}danger{% endif %}"><i class="bi bi-exclamation-diamond-fill"></i></span></div>
-                <div class="owner-stat-value">{{ missing_goats_count }}</div>
-                <div class="owner-stat-label">Missing goats</div>
-                <div class="owner-stat-meta">{% if missing_goats_count %}Requires attention{% else %}No goats marked missing{% endif %}</div>
+                <div class="owner-stat-top"><span class="owner-stat-icon"><i class="bi bi-thermometer-half"></i></span></div>
+                <div class="owner-stat-value">{% if latest_sensor.temperature is not None %}{{ latest_sensor.temperature|floatformat:1 }}°{% else %}—{% endif %}</div>
+                <div class="owner-stat-label">Temperature</div>
+                <div class="owner-stat-meta">Latest goat-house reading</div>
             </article>
             <article class="owner-stat">
-                <div class="owner-stat-top"><span class="owner-stat-icon"><i class="bi bi-broadcast-pin"></i></span></div>
-                <div class="owner-stat-value">{{ goats_currently_detected }}</div>
-                <div class="owner-stat-label">Recently detected</div>
-                <div class="owner-stat-meta">Seen during the last 5 minutes</div>
+                <div class="owner-stat-top"><span class="owner-stat-icon"><i class="bi bi-droplet-fill"></i></span></div>
+                <div class="owner-stat-value">{% if latest_sensor.humidity is not None %}{{ latest_sensor.humidity|floatformat:0 }}%{% else %}—{% endif %}</div>
+                <div class="owner-stat-label">Humidity</div>
+                <div class="owner-stat-meta">Latest goat-house reading</div>
             </article>
+            <article class="owner-stat"><div class="owner-stat-top"><span class="owner-stat-icon {% if online_actuators < total_actuators %}warning{% endif %}"><i class="bi bi-router-fill"></i></span></div><div class="owner-stat-value">{{ online_actuators }}/{{ total_actuators }}</div><div class="owner-stat-label">Device status</div><div class="owner-stat-meta">Controllers currently online</div></article>
+            <article class="owner-stat"><div class="owner-stat-top"><span class="owner-stat-icon {% if missing_goats_count %}danger{% endif %}"><i class="bi bi-exclamation-triangle-fill"></i></span></div><div class="owner-stat-value">{{ missing_goats_count }}</div><div class="owner-stat-label">Security alerts</div><div class="owner-stat-meta">{% if missing_goats_count %}Needs your attention{% else %}No missing-goat alerts{% endif %}</div></article>
+            <article class="owner-stat"><div class="owner-stat-top"><span class="owner-stat-icon"><i class="bi bi-bounding-box-circles"></i></span></div><div class="owner-stat-value">{{ goats_currently_detected }}</div><div class="owner-stat-label">Recent detections</div><div class="owner-stat-meta">Goats seen in the last 5 minutes</div></article>
+            <article class="owner-stat"><div class="owner-stat-top"><span class="owner-stat-icon {% if nav_unread_count %}warning{% endif %}"><i class="bi bi-bell-fill"></i></span></div><div class="owner-stat-value">{{ nav_unread_count }}</div><div class="owner-stat-label">Notifications</div><div class="owner-stat-meta">Unread farm updates</div></article>
+        </div>
+    </section>
+
+    <section class="dashboard-section" aria-labelledby="owner-weather-heading">
+        <h2 class="section-heading" id="owner-weather-heading"><i class="bi bi-cloud-sun-fill"></i> Outdoor weather</h2>
+        <div class="owner-panel">
+            {% if weather_info.available %}
+            <div class="owner-weather-grid">
+                <div class="owner-weather-item">
+                    <i class="bi bi-thermometer-sun-fill"></i>
+                    <div class="owner-weather-value">{{ weather_info.temperature_c|default_if_none:'—' }}{% if weather_info.temperature_c is not None %}&deg;C{% endif %}</div>
+                    <div class="owner-weather-label">Temperature</div>
+                </div>
+                <div class="owner-weather-item">
+                    <i class="bi bi-droplet-fill"></i>
+                    <div class="owner-weather-value">{{ weather_info.humidity_pct|default_if_none:'—' }}{% if weather_info.humidity_pct is not None %}%{% endif %}</div>
+                    <div class="owner-weather-label">Humidity</div>
+                </div>
+                <div class="owner-weather-item">
+                    <i class="bi bi-cloud-rain-fill"></i>
+                    <div class="owner-weather-value">{{ weather_info.rain_chance_pct|default:weather_info.today_rain_chance_pct|default_if_none:'—' }}{% if weather_info.rain_chance_pct is not None or weather_info.today_rain_chance_pct is not None %}%{% endif %}</div>
+                    <div class="owner-weather-label">Chance of rain</div>
+                </div>
+                <div class="owner-weather-item">
+                    <i class="bi bi-wind"></i>
+                    <div class="owner-weather-value">{{ weather_info.wind_kph|default_if_none:'—' }}{% if weather_info.wind_kph is not None %} km/h{% endif %}</div>
+                    <div class="owner-weather-label">{{ weather_info.summary|default:'Current conditions' }}</div>
+                </div>
+            </div>
+            <p class="owner-weather-note">
+                Weather data by {{ weather_info.provider|default:'Open-Meteo' }}.
+                {% if weather_info.stale %}The live service is unavailable, so this is the last saved reading.{% else %}Updated from the live weather API.{% endif %}
+            </p>
+            {% else %}
+            <div class="empty-state"><i class="bi bi-cloud-slash-fill"></i><br>Outdoor weather is temporarily unavailable.</div>
+            {% endif %}
         </div>
     </section>
 
@@ -469,12 +526,8 @@
                         <a class="quick-link" href="{% url 'iot:monitoring_dashboard' %}"><i class="bi bi-camera-video-fill"></i> Monitoring</a>
                         <a class="quick-link" href="/ml/detection/"><i class="bi bi-bounding-box-circles"></i> Live detection</a>
                         <a class="quick-link" href="{% url 'iot:goat_inventory' %}"><i class="bi bi-grid-3x3-gap-fill"></i> Goat inventory</a>
-                        <a class="quick-link" href="{% url 'iot:ble_tracking_dashboard' %}"><i class="bi bi-broadcast-pin"></i> Goat tracking</a>
-                        <a class="quick-link" href="/marketplace/"><i class="bi bi-shop"></i> Marketplace</a>
                         {% if can_manage_farm %}
-                        <a class="quick-link" href="{% url 'iot:automation_control' %}"><i class="bi bi-robot"></i> Automation</a>
-                        <a class="quick-link" href="/security/"><i class="bi bi-shield-check"></i> Security</a>
-                        <a class="quick-link" href="/analytics/"><i class="bi bi-file-earmark-bar-graph-fill"></i> Reports</a>
+                        <a class="quick-link" href="/security/"><i class="bi bi-shield-check"></i> Alerts</a>
                         {% endif %}
                     </div>
                 </div>
@@ -488,7 +541,7 @@
                         <span class="state ok">Active</span>
                     </div>
                     {% empty %}
-                    <div class="empty-state">No active feeding schedule.</div>
+                    <div class="empty-state">No feeding schedule is active. Open Feeding to set the first schedule.</div>
                     {% endfor %}
                 </div>
             </div>
@@ -510,7 +563,7 @@
                         <span class="state {% if goat.status == 'missing' %}danger{% elif goat.health_status == 'healthy' %}ok{% else %}warning{% endif %}">{{ goat.get_status_display }}</span>
                     </div>
                     {% empty %}
-                    <div class="empty-state">No goats are registered yet.</div>
+                    <div class="empty-state">No goats have been registered yet. Add your first goat to get started.</div>
                     {% endfor %}
                 </div>
             </div>

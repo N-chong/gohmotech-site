@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     DeviceViewSet, SensorDataViewSet, AlertViewSet, SensorReadingViewSet,
+    SensorReadingSummaryViewSet,
     ActuatorStateViewSet, AutomationRuleViewSet, ActuationLogViewSet,
     dashboard_modern, goats_list, goat_detail, add_goat, goat_photo_camera, devices_list, device_detail, monitoring_dashboard,
     automation_control, automation_schedule,
@@ -32,6 +33,7 @@ router = DefaultRouter()
 router.register(r'devices', DeviceViewSet)
 router.register(r'sensor-data', SensorDataViewSet)
 router.register(r'sensor-readings', SensorReadingViewSet)
+router.register(r'sensor-summaries', SensorReadingSummaryViewSet)
 router.register(r'alerts', AlertViewSet)
 router.register(r'actuators', ActuatorStateViewSet)
 router.register(r'automation-rules', AutomationRuleViewSet)

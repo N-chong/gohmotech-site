@@ -14,6 +14,7 @@ class NotificationSerializer(serializers.ModelSerializer):
     resolution_time_seconds = serializers.SerializerMethodField()
     resolved_by_name = serializers.SerializerMethodField()
     event_url = serializers.SerializerMethodField()
+    sms_status = serializers.SerializerMethodField()
 
     class Meta:
         model = Notification
@@ -25,7 +26,7 @@ class NotificationSerializer(serializers.ModelSerializer):
             'is_resolved', 'resolved_at', 'resolved_by', 'resolved_by_name',
             'resolution_notes', 'resolution_time_seconds',
             'metadata', 'created_at', 'updated_at',
-            'source_content_type', 'source_object_id', 'event_url',
+            'source_content_type', 'source_object_id', 'event_url', 'sms_status',
         ]
         read_only_fields = [
             'read_at', 'resolved_at', 'resolved_by', 'created_at', 'updated_at',
@@ -55,6 +56,18 @@ class NotificationSerializer(serializers.ModelSerializer):
         # Other event types expose their own admin/detail pages elsewhere;
         # we avoid guessing a URL we cannot guarantee exists.
         return None
+
+    def get_sms_status(self, obj):
+        logs = list(obj.sms_logs.all())
+        if not logs:
+            return None
+        latest = max(logs, key=lambda log: log.created_at)
+        return {
+            'status': latest.status,
+            'display': latest.get_status_display(),
+            'attempted_at': latest.created_at,
+            'error': latest.error_message,
+        }
 
 
 class PersonDetectionSerializer(serializers.ModelSerializer):

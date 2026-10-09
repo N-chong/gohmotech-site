@@ -63,7 +63,17 @@ def send_sms(*, message, sms_type, number=None, notification=None,
         return log
 
     client = get_client()
-    result = client.send(normalized, message)
+    log.mark_sending(provider=getattr(client, 'name', ''))
+    logger.info("[SMS] Sending %s SMS log=%s provider=%s", sms_type, log.pk,
+                getattr(client, 'name', 'unknown'))
+    try:
+        result = client.send(normalized, message)
+    except Exception as exc:  # Provider failures must never break monitoring.
+        safe_error = f"{exc.__class__.__name__}: {exc}"[:500]
+        log.mark_failed(error=safe_error,
+                        provider=getattr(client, 'name', ''))
+        logger.exception("[SMS] Provider error for log=%s", log.pk)
+        return log
 
     if result.ok:
         log.mark_sent(
@@ -71,10 +81,14 @@ def send_sms(*, message, sms_type, number=None, notification=None,
             message_id=result.message_id,
             api_response=result.raw,
         )
+        logger.info("[SMS] Sent successfully log=%s provider_message_id=%s",
+                    log.pk, result.message_id or '-')
     else:
         log.mark_failed(
             error=result.error,
             provider=result.provider,
             api_response=result.raw,
         )
+        logger.warning("[SMS] Failed log=%s reason=%s", log.pk,
+                       (result.error or 'provider rejected request')[:500])
     return log

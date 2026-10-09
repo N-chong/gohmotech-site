@@ -1,9 +1,13 @@
-{% extends "marketplace/buyer_base.html" %}
+{% extends "marketplace/buyer_base.html" %}{% load static %}
 {% block title %}Seller Messages | GoHMoTech{% endblock %}
-{% block content %}<section class="buyer-page"><div class="store-container">{% include "marketplace/_messages.html" %}
-  <div class="section-heading"><div><span class="section-kicker">Seller workspace</span><h2>Buyer messages</h2><p>Reply to inquiries sent specifically to your goat listings.</p></div><a class="button button-ghost" href="{% url 'marketplace:seller_dashboard' %}"><i class="bi bi-grid"></i> Seller dashboard</a></div>
-  <div class="inquiry-list">{% for conversation in conversations %}<a class="inquiry-item {% if conversation.unread_count %}inquiry-unread{% endif %}" href="{% url 'marketplace:conversation' conversation.pk %}">
-    <div class="inquiry-main"><span class="detail-tag">Goat {{ conversation.listing.goat.goat_id }}</span><h3>{{ conversation.buyer.get_full_name|default:conversation.buyer.username }}</h3><p><i class="bi bi-chat-left-text"></i> Inquiry about {{ conversation.listing.goat.name|default:conversation.listing.goat.get_breed_display }}</p><small>{{ conversation.message_count }} message{{ conversation.message_count|pluralize }} · updated {{ conversation.updated_at|date:"M j, Y · g:i A" }}</small></div>
-    <div class="inquiry-meta">{% if conversation.unread_count %}<span class="unread-badge">{{ conversation.unread_count }} new</span>{% endif %}<span class="conversation-status conversation-status-{{ conversation.status }}">{{ conversation.get_status_display }}</span><span class="availability availability-{{ conversation.listing.status }}"><i class="bi bi-circle-fill"></i> {{ conversation.listing.get_status_display }}</span><i class="bi bi-chevron-right"></i></div>
-  </a>{% empty %}<div class="empty-store" style="background:#fff"><i class="bi bi-inbox"></i><h3>No buyer messages yet</h3><p>New inquiries will appear here when buyers contact you about your listings.</p><a class="button button-primary" href="{% url 'marketplace:seller_listings' %}">View my listings</a></div>{% endfor %}</div>
-</div></section>{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'marketplace/messaging.css' %}?v=20261009-5">{% endblock %}
+{% block content %}
+<section class="messenger-page"><div class="messenger-wrap">
+  {% include "marketplace/_messages.html" %}
+  <div class="messenger-shell messenger-shell-inbox">
+    {% include "marketplace/_conversation_list.html" with seller_mode=True inbox_title="Buyer messages" inbox_eyebrow="Seller inbox" %}
+    <section class="messenger-empty-panel" aria-label="No conversation selected"><div class="messenger-empty-illustration"><i class="bi bi-inbox"></i></div><h1>Manage buyer inquiries</h1><p>Select a buyer to review their messages, listing context, and existing transaction actions.</p><a class="button button-primary" href="{% url 'marketplace:seller_dashboard' %}"><i class="bi bi-grid"></i> Seller dashboard</a></section>
+  </div>
+</div></section>
+{% endblock %}
+{% block scripts %}<script src="{% static 'marketplace/messaging.js' %}?v=20261009-2" defer></script>{% endblock %}

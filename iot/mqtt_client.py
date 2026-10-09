@@ -132,9 +132,9 @@ class GoatMonitoringMQTTClient:
                 }
             )
             
-            # Update last seen
-            device.last_seen = timezone.now()
-            device.save(update_fields=['last_seen'])
+            # Keep health/offline detection independent of retained raw rows.
+            device.last_sensor_received_at = timezone.now()
+            device.save(update_fields=['last_sensor_received_at'])
             
             # Create sensor reading
             SensorData.objects.create(

@@ -42,7 +42,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
       ?search=<text>                title/description/source
       ?ordering=-created_at | severity | ...
     """
-    queryset = Notification.objects.all()
+    queryset = Notification.objects.prefetch_related('sms_logs').all()
     serializer_class = NotificationSerializer
     permission_classes = [IsFarmOwnerOrAdmin]
 

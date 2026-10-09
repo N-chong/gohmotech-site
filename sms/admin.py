@@ -2,7 +2,8 @@
 
 from django.contrib import admin
 
-from .models import SmsLog, SmsRegistration, SmsReminder, SmsSettings
+from .models import (DailySummaryRun, SmsLog, SmsRegistration, SmsReminder,
+                     SmsSettings)
 
 
 @admin.register(SmsSettings)
@@ -29,8 +30,9 @@ class SmsReminderAdmin(admin.ModelAdmin):
 
 @admin.register(SmsRegistration)
 class SmsRegistrationAdmin(admin.ModelAdmin):
-    list_display = ('user', 'phone_number', 'is_active', 'registered_at', 'updated_at')
-    list_filter = ('is_active', 'registered_at')
+    list_display = ('user', 'phone_number', 'is_active', 'receives_farm_alerts',
+                    'registered_at', 'updated_at')
+    list_filter = ('is_active', 'receives_farm_alerts', 'registered_at')
     search_fields = ('user__username', 'user__email', 'phone_number')
     readonly_fields = ('registered_at', 'updated_at')
 
@@ -57,3 +59,19 @@ class SmsLogAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return request.user.is_superuser
+
+
+@admin.register(DailySummaryRun)
+class DailySummaryRunAdmin(admin.ModelAdmin):
+    list_display = ('scheduled_date', 'scheduled_for', 'executed_at', 'status',
+                    'recipient', 'sms_log')
+    list_filter = ('status', 'scheduled_date')
+    readonly_fields = ('scheduled_date', 'scheduled_for', 'executed_at', 'status',
+                       'recipient', 'error_message', 'sms_log', 'created_at',
+                       'updated_at')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False

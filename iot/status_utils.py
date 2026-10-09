@@ -30,10 +30,14 @@ def device_last_seen(device):
     if device is None:
         return None
     try:
+        if device.last_sensor_received_at is not None:
+            return device.last_sensor_received_at
         from .models import SensorReading, SensorData
+        # Connectivity is based on when the server heard from the device, not
+        # when a potentially delayed measurement was captured.
         reading_ts = (
             SensorReading.objects.filter(device=device)
-            .order_by('-timestamp').values_list('timestamp', flat=True).first()
+            .order_by('-received_at').values_list('received_at', flat=True).first()
         )
         data_ts = (
             SensorData.objects.filter(device=device)

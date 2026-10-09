@@ -26,6 +26,7 @@ with tempfile.TemporaryDirectory(prefix='gohmotech-tests-') as directory:
     settings.WEATHER_ENABLED = False
     settings.MEDIA_ROOT = Path(directory) / 'media'
     settings.PRIVATE_SUPPORT_ROOT = Path(directory) / 'support'
+    settings.PRIVATE_INQUIRY_ROOT = Path(directory) / 'inquiries'
     settings.PROTECTED_MODELS_ROOT = Path(directory) / 'models'
     settings.PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
     django.setup()

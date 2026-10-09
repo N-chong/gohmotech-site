@@ -66,6 +66,12 @@
         font-size: 0.875rem; line-height: 1.45;
         margin-bottom: var(--spacing-xl);
     }
+    .rpt-error { background: var(--danger-bg); color: var(--danger); }
+    .rpt-period { margin: -.5rem 0 var(--spacing-lg); color: var(--text-secondary); font-size: .875rem; }
+    .rpt-insights { padding: var(--spacing-lg); margin-bottom: var(--spacing-xl); }
+    .rpt-insights ul { margin: .65rem 0 0; padding-left: 1.2rem; color: var(--text-secondary); }
+    .rpt-insights li + li { margin-top: .4rem; }
+    .rpt-pagination { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem; border-top: 1px solid var(--border-color); }
     .rpt-note i { margin-top: 0.15rem; }
 
     .rpt-charts {
@@ -173,15 +179,18 @@
         <div class="rpt-toolbar" style="margin-bottom: 0;">
             <form method="get" id="reportFilterForm" class="rpt-filters">
                 {% for field in report.filter_form %}
-                <div class="rpt-field">
+                <div class="rpt-field{% if field.custom_only %} rpt-custom-date{% endif %}">
                     <label for="f_{{ field.name }}">{{ field.label }}</label>
                     {% if field.kind == 'select' %}
                     <select id="f_{{ field.name }}" name="{{ field.name }}" class="form-select"
-                            onchange="document.getElementById('reportFilterForm').submit()">
+                            {% if field.name != 'period' %}onchange="document.getElementById('reportFilterForm').submit()"{% endif %}>
                         {% for opt_value, opt_label in field.options %}
                         <option value="{{ opt_value }}" {% if opt_value == field.value %}selected{% endif %}>{{ opt_label }}</option>
                         {% endfor %}
                     </select>
+                    {% elif field.kind == 'date' %}
+                    <input id="f_{{ field.name }}" type="date" name="{{ field.name }}"
+                           class="form-control" value="{{ field.value }}">
                     {% else %}
                     <input id="f_{{ field.name }}" type="text" name="{{ field.name }}"
                            class="form-control" placeholder="{{ field.label }}" value="{{ field.value }}">
@@ -194,18 +203,21 @@
                 </div>
             </form>
             <div class="rpt-actions">
-                <a href="{{ export_url }}?{{ request.GET.urlencode }}&format=csv" class="btn btn-outline-secondary">
+                <a href="{{ export_url }}?{% if action_query %}{{ action_query }}&amp;{% endif %}format=csv" class="btn btn-outline-secondary">
                     <i class="bi bi-filetype-csv"></i> CSV
                 </a>
-                <a href="{{ export_url }}?{{ request.GET.urlencode }}&format=xlsx" class="btn btn-outline-secondary">
+                <a href="{{ export_url }}?{% if action_query %}{{ action_query }}&amp;{% endif %}format=xlsx" class="btn btn-outline-secondary">
                     <i class="bi bi-file-earmark-excel"></i> Excel
                 </a>
-                <a href="{{ print_url }}?{{ request.GET.urlencode }}" target="_blank" class="btn btn-outline-primary">
-                    <i class="bi bi-printer"></i> Print / PDF
+                <a href="{{ print_url }}{% if action_query %}?{{ action_query }}{% endif %}" target="_blank" class="btn btn-outline-primary">
+                    <i class="bi bi-file-earmark-pdf"></i> Generate PDF / Print
                 </a>
             </div>
         </div>
     </div>
+
+    {% if report.period %}<div class="rpt-period"><i class="bi bi-calendar3"></i> Reporting period: <strong>{{ report.period.label }}</strong></div>{% endif %}
+    {% if filter_error %}<div class="rpt-note rpt-error"><i class="bi bi-exclamation-circle-fill"></i><span>{{ filter_error }} The default period is shown below.</span></div>{% endif %}
 
     <!-- Data-availability note -->
     {% if report.note %}
@@ -213,6 +225,13 @@
         <i class="bi bi-info-circle-fill"></i>
         <span>{{ report.note }}</span>
     </div>
+    {% endif %}
+
+    {% if report.insights %}
+    <section class="content-card rpt-insights">
+        <strong><i class="bi bi-lightbulb"></i> Period insights</strong>
+        <ul>{% for insight in report.insights %}<li>{{ insight }}</li>{% endfor %}</ul>
+    </section>
     {% endif %}
 
     <!-- Summary KPI cards -->
@@ -232,12 +251,14 @@
     {% if report.charts %}
     <div class="rpt-charts">
         {% for chart in report.charts %}
+        {% if chart.has_data %}
         <div class="rpt-chart-card">
             <div class="rpt-chart-title">{{ chart.title }}</div>
             <div class="rpt-chart-canvas-wrap">
                 <canvas id="chart_{{ chart.id }}"></canvas>
             </div>
         </div>
+        {% endif %}
         {% endfor %}
     </div>
     {% endif %}
@@ -255,7 +276,7 @@
                     <tr>{% for col in report.columns %}<th>{{ col }}</th>{% endfor %}</tr>
                 </thead>
                 <tbody>
-                    {% for row in report.rows %}
+                    {% for row in display_rows %}
                     <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
                     {% endfor %}
                 </tbody>
@@ -265,8 +286,17 @@
         <div class="empty-state">
             <i class="bi bi-inbox"></i>
             <h5>No data for this selection</h5>
-            <p>Try a different filter or a wider time period.</p>
+            <p>{{ report.empty_message }}</p>
         </div>
+        {% endif %}
+        {% if page_obj.paginator.num_pages > 1 %}
+        <nav class="rpt-pagination" aria-label="Detailed data pages">
+            <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+            <div>
+                {% if page_obj.has_previous %}<a class="btn btn-sm btn-outline-secondary" href="?{% if query_without_page %}{{ query_without_page }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}
+                {% if page_obj.has_next %}<a class="btn btn-sm btn-outline-secondary" href="?{% if query_without_page %}{{ query_without_page }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Next</a>{% endif %}
+            </div>
+        </nav>
         {% endif %}
     </div>
 
@@ -283,6 +313,13 @@ document.addEventListener('DOMContentLoaded', function () {
     const palette = ['#1F6F3D', '#0EA5E9', '#EAB308', '#8B5CF6', '#EF4444',
                      '#14B8A6', '#F97316', '#6366F1', '#84CC16', '#EC4899'];
     const gridColor = getComputedStyle(document.body).getPropertyValue('--border-color') || '#e5e7eb';
+
+    if (typeof Chart === 'undefined') {
+        document.querySelectorAll('.rpt-chart-canvas-wrap').forEach(function (wrap) {
+            wrap.innerHTML = '<p class="page-subtitle">Chart preview is unavailable. The summary and detailed records remain available below.</p>';
+        });
+        return;
+    }
 
     charts.forEach(function (chart) {
         const canvas = document.getElementById('chart_' + chart.id);
@@ -314,12 +351,21 @@ document.addEventListener('DOMContentLoaded', function () {
                     legend: { display: isPie || chart.datasets.length > 1, position: 'bottom' }
                 },
                 scales: isPie ? {} : {
-                    x: { grid: { color: gridColor } },
-                    y: { beginAtZero: true, grid: { color: gridColor } }
+                    x: { grid: { color: gridColor }, title: { display: Boolean(chart.x_title), text: chart.x_title } },
+                    y: { beginAtZero: true, grid: { color: gridColor }, title: { display: Boolean(chart.y_title), text: chart.y_title } }
                 }
             }
         });
     });
 });
+
+const periodSelect = document.getElementById('f_period');
+const customDateFields = document.querySelectorAll('.rpt-custom-date');
+function toggleCustomDates() {
+    const show = periodSelect && periodSelect.value === 'custom';
+    customDateFields.forEach(function (field) { field.hidden = !show; });
+}
+if (periodSelect) periodSelect.addEventListener('change', toggleCustomDates);
+toggleCustomDates();
 </script>
 {% endblock %}

@@ -1,0 +1,37 @@
+/* Scoped additions shared by the farm shell and marketplace. */
+.onboarding-replay { display: block; width: 100%; padding: .65rem 1rem; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.onboarding-replay:hover, .onboarding-replay:focus-visible { background: rgba(69, 132, 90, .12); }
+.onboarding-layer { position: fixed; inset: 0; z-index: 2147483000; pointer-events: none; }
+.onboarding-shade { position: absolute; background: rgba(9, 24, 17, .72); pointer-events: auto; }
+.onboarding-ring { position: absolute; border: 3px solid #a8d17c; border-radius: 10px; box-shadow: 0 0 0 2px #174f38; pointer-events: none; }
+.onboarding-card { position: absolute; pointer-events: auto; box-sizing: border-box; width: min(360px, calc(100vw - 24px)); padding: 20px; border: 1px solid var(--border-color, #d5e0d4); border-radius: 18px; background: var(--card-bg, #fffef9); color: var(--text-primary, #203b2e); box-shadow: 0 18px 60px #0005; font-family: inherit; overflow-y: auto; overscroll-behavior: contain; }
+.onboarding-card h2 { font-size: 1.25rem; line-height: 1.3; margin: 10px 0; color: inherit; }
+.onboarding-card p { font-size: .95rem; line-height: 1.5; margin: 0 0 16px; color: inherit; }
+.onboarding-progress { font-size: .8rem; font-weight: 700; color: var(--text-secondary, #476449); }
+.onboarding-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.onboarding-card button { min-height: 44px; padding: 8px 14px; border: 1px solid #b9cbb8; border-radius: 9px; background: var(--card-bg, #fffef9); color: inherit; font: inherit; font-size: .9rem; font-weight: 600; cursor: pointer; }
+.onboarding-card button.onboarding-primary { background: #24573d; color: white; border-color: #24573d; }
+.onboarding-card button.onboarding-skip { display: block; margin: 14px 0 0; width: 100%; text-decoration: underline; border-color: transparent; }
+.onboarding-card button:disabled { opacity: .6; cursor: wait; }
+.onboarding-card button:focus-visible { outline: 3px solid #8db963; outline-offset: 2px; }
+.onboarding-error { color: #af3028 !important; margin-top: 10px !important; }
+@media (max-width: 600px), (max-height: 500px) { .onboarding-card { padding: 14px; } .onboarding-card h2 { margin: 6px 0; font-size: 1.1rem; } .onboarding-card p { margin-bottom: 10px; font-size: .88rem; } }
+
+/* Decorative sibling: it cannot change card size or intercept any controls. */
+.onboarding-goat {
+    position: absolute;
+    display: block;
+    width: clamp(85px, 11vw, 170px);
+    height: auto;
+    object-fit: contain;
+    pointer-events: none;
+    user-select: none;
+    flex-shrink: 0;
+    border-radius: 16px;
+    filter: drop-shadow(0 4px 8px rgba(30, 58, 138, .15));
+    animation: onboarding-goat-appear .18s ease-out;
+}
+.onboarding-goat[hidden] { display: none; }
+@keyframes onboarding-goat-appear { from { opacity: 0; } to { opacity: 1; } }
+@media (max-width: 768px) { .onboarding-goat { width: 90px; } }
+@media (prefers-reduced-motion: reduce) { .onboarding-goat { animation: none; } }

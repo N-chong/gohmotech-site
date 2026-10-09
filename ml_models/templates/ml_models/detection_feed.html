@@ -638,7 +638,7 @@
                 // Show the 15 most recent (API returns newest first).
                 const rows = data.slice(0, 15).map(d => {
                     const t = d.timestamp ? new Date(d.timestamp) : null;
-                    const timeStr = t ? t.toLocaleString([], {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'}) : '—';
+                    const timeStr = t ? t.toLocaleString([], {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila'}) : '—';
                     const count = (typeof d.goat_count === 'number') ? d.goat_count : 0;
                     const conf = (typeof d.confidence === 'number') ? Math.round(d.confidence * 100) : 0;
                     const src = d.camera_name ? d.camera_name : 'Test upload';

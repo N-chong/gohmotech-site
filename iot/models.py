@@ -12,6 +12,13 @@ class Device(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    last_sensor_received_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        editable=False,
+        help_text="Backend receipt time of the latest environmental reading.",
+    )
 
     class Meta:
         ordering = ['-created_at']
@@ -28,12 +35,17 @@ class SensorData(models.Model):
     value = models.FloatField()
     unit = models.CharField(max_length=50)
     metadata = models.JSONField(null=True, blank=True)
+    aggregation_completed_at = models.DateTimeField(
+        null=True, blank=True, db_index=True, editable=False,
+        help_text="Set only after this raw row's 30-minute period was processed.",
+    )
     
     class Meta:
         ordering = ['-timestamp']
         indexes = [
             models.Index(fields=['device', '-timestamp']),
             models.Index(fields=['sensor_type', '-timestamp']),
+            models.Index(fields=['aggregation_completed_at', 'timestamp']),
         ]
 
     def __str__(self):
@@ -53,6 +65,12 @@ class Alert(models.Model):
     sensor_data = models.ForeignKey(SensorData, on_delete=models.SET_NULL, null=True, blank=True)
     severity = models.CharField(max_length=20, choices=SEVERITY_CHOICES, default='medium')
     message = models.TextField()
+    alert_kind = models.CharField(
+        max_length=40, blank=True, db_index=True,
+        help_text="Stable machine-readable category such as sensor_stale or temperature_high")
+    deduplication_key = models.CharField(
+        max_length=255, blank=True, db_index=True,
+        help_text="Key used to keep one unresolved alert per ongoing condition")
     is_resolved = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
@@ -64,8 +82,67 @@ class Alert(models.Model):
         return f"{self.severity.upper()} - {self.device.name}: {self.message[:50]}"
 
 
+class EnvironmentalAlertSettings(models.Model):
+    """Singleton policy for real sensor alerts.
+
+    Scientific limits are deliberately nullable: an unset threshold produces
+    no threshold alert. Staleness uses the firmware's documented 30-second send
+    interval. To avoid false SMS alerts during brief Wi-Fi interruptions, a
+    device is considered stale only after at least 30 minutes without data.
+    """
+
+    enabled = models.BooleanField(default=True)
+    temperature_min_c = models.FloatField(null=True, blank=True)
+    temperature_max_c = models.FloatField(null=True, blank=True)
+    humidity_min_percent = models.FloatField(
+        null=True, blank=True, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    humidity_max_percent = models.FloatField(
+        null=True, blank=True, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    stale_detection_enabled = models.BooleanField(default=True)
+    stale_after_seconds = models.PositiveIntegerField(
+        default=1800,
+        help_text="Minimum 1800 seconds (30 minutes) without data before a stale alert.")
+    threshold_severity = models.CharField(
+        max_length=20, choices=Alert.SEVERITY_CHOICES, default='high')
+    stale_severity = models.CharField(
+        max_length=20, choices=Alert.SEVERITY_CHOICES, default='high')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Environmental Alert Settings'
+        verbose_name_plural = 'Environmental Alert Settings'
+
+    @classmethod
+    def get_config(cls):
+        config, _ = cls.objects.get_or_create(pk=1)
+        return config
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        errors = {}
+        if (self.temperature_min_c is not None and self.temperature_max_c is not None
+                and self.temperature_min_c >= self.temperature_max_c):
+            errors['temperature_max_c'] = 'Maximum must be greater than minimum.'
+        if (self.humidity_min_percent is not None and self.humidity_max_percent is not None
+                and self.humidity_min_percent >= self.humidity_max_percent):
+            errors['humidity_max_percent'] = 'Maximum must be greater than minimum.'
+        if self.stale_after_seconds < 1800:
+            errors['stale_after_seconds'] = 'Must be at least 1800 seconds (30 minutes).'
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return 'Environmental alert policy'
+
+
 class SensorReading(models.Model):
-    """Aggregated environmental sensor readings"""
+    """Temporary raw environmental readings received from ESP32 devices.
+
+    ``timestamp`` is when the device measured the values.  Older firmware does
+    not provide it, in which case it safely falls back to the backend clock.
+    ``received_at`` is always assigned by Django and records API arrival.  Both
+    are timezone-aware instants and are stored as UTC when ``USE_TZ`` is on.
+    """
     device = models.ForeignKey(
         Device,
         on_delete=models.CASCADE,
@@ -132,7 +209,7 @@ class SensorReading(models.Model):
     rain_detected = models.BooleanField(
         null=True,
         blank=True,
-        default=False,
+        default=None,
         help_text="Rain sensor status (True = raining, False = dry)"
     )
     feeder_level = models.FloatField(
@@ -142,15 +219,85 @@ class SensorReading(models.Model):
     )
     
     timestamp = models.DateTimeField(default=timezone.now, db_index=True)
+    received_at = models.DateTimeField(default=timezone.now, db_index=True, editable=False)
+    aggregation_completed_at = models.DateTimeField(
+        null=True, blank=True, db_index=True, editable=False,
+        help_text="Set only after this raw row's 30-minute period was processed.",
+    )
     
     class Meta:
         ordering = ['-timestamp']
         indexes = [
             models.Index(fields=['device', '-timestamp']),
+            models.Index(fields=['aggregation_completed_at', 'timestamp']),
         ]
     
     def __str__(self):
         return f"{self.device.name} - {self.timestamp}"
+
+
+class SensorReadingSummary(models.Model):
+    """Permanent statistics for one device stream and fixed 30-minute period."""
+
+    device = models.ForeignKey(
+        Device, on_delete=models.CASCADE, related_name='sensor_summaries')
+    sensor_type = models.CharField(max_length=100)
+    unit = models.CharField(max_length=50, blank=True)
+    period_start = models.DateTimeField(db_index=True)
+    period_end = models.DateTimeField(db_index=True)
+    average_value = models.FloatField()
+    minimum_value = models.FloatField()
+    maximum_value = models.FloatField()
+    sample_count = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-period_start', 'device_id', 'sensor_type']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['device', 'sensor_type', 'period_start', 'period_end'],
+                name='unique_sensor_summary_period',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['device', 'sensor_type', 'period_start']),
+            models.Index(fields=['sensor_type', 'period_start']),
+        ]
+
+    def __str__(self):
+        return f"{self.device.name} {self.sensor_type} {self.period_start}"
+
+
+class SensorStorageSettings(models.Model):
+    """Singleton retention policy and cleanup audit state."""
+
+    raw_retention_days = models.PositiveSmallIntegerField(
+        default=30,
+        validators=[MinValueValidator(7), MaxValueValidator(365)],
+        help_text="Keep raw readings for 7-365 days. Summaries are retained.",
+    )
+    cleanup_enabled = models.BooleanField(
+        default=False,
+        help_text="Enable only after historical summaries have been verified.",
+    )
+    last_cleanup_at = models.DateTimeField(null=True, blank=True, editable=False)
+    last_cleanup_deleted = models.PositiveIntegerField(default=0, editable=False)
+    total_cleanup_deleted = models.PositiveBigIntegerField(default=0, editable=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Sensor Storage Settings'
+        verbose_name_plural = 'Sensor Storage Settings'
+
+    @classmethod
+    def get_config(cls):
+        config, _ = cls.objects.get_or_create(pk=1)
+        return config
+
+    def __str__(self):
+        state = 'enabled' if self.cleanup_enabled else 'disabled'
+        return f"Raw sensor retention: {self.raw_retention_days} days ({state})"
 
 
 class ActuatorState(models.Model):
@@ -346,7 +493,8 @@ from .goat_models import (
 )
 
 __all__ = [
-    'Device', 'SensorData', 'Alert', 'SensorReading', 'ActuatorState',
+    'Device', 'SensorData', 'Alert', 'EnvironmentalAlertSettings', 'SensorReading',
+    'SensorReadingSummary', 'SensorStorageSettings', 'ActuatorState',
     'AutomationRule', 'ActuationLog', 'Goat', 'GoatWeightMeasurement', 'GoatImage',
     'GoatBehaviorLog', 'GrassHealthLog', 'BLEBeacon', 'BLEReceiver',
     'BLETrackingState', 'BLEObservation', 'BLETrackingSettings',

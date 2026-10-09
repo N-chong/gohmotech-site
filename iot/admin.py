@@ -1,7 +1,11 @@
 from django.contrib import admin
 from django import forms
+from django.conf import settings
+import os
+import shutil
 from .models import (
-    Device, SensorData, Alert, SensorReading,
+    Device, SensorData, Alert, EnvironmentalAlertSettings, SensorReading,
+    SensorReadingSummary, SensorStorageSettings,
     Goat, GoatWeightMeasurement, GoatImage, GoatBehaviorLog, GrassHealthLog,
     ActuatorState, AutomationRule, ActuationLog,
     BLEBeacon, BLEReceiver, BLETrackingState, BLEObservation,
@@ -94,10 +98,32 @@ class SensorDataAdmin(admin.ModelAdmin):
 
 @admin.register(Alert)
 class AlertAdmin(admin.ModelAdmin):
-    list_display = ['device', 'severity', 'message', 'is_resolved', 'created_at']
-    list_filter = ['severity', 'is_resolved', 'created_at']
-    search_fields = ['device__name', 'message']
+    list_display = ['device', 'alert_kind', 'severity', 'message', 'is_resolved', 'created_at']
+    list_filter = ['alert_kind', 'severity', 'is_resolved', 'created_at']
+    search_fields = ['device__name', 'message', 'deduplication_key']
     # date_hierarchy = 'created_at'  # Commented out - requires MySQL timezone tables on Windows
+
+
+@admin.register(EnvironmentalAlertSettings)
+class EnvironmentalAlertSettingsAdmin(admin.ModelAdmin):
+    list_display = ['__str__', 'enabled', 'stale_detection_enabled',
+                    'stale_after_seconds', 'updated_at']
+    readonly_fields = ['updated_at']
+    fieldsets = (
+        ('Monitoring', {'fields': ('enabled', 'stale_detection_enabled',
+                                   'stale_after_seconds', 'stale_severity')}),
+        ('Configured thresholds (leave blank to disable)', {
+            'fields': ('temperature_min_c', 'temperature_max_c',
+                       'humidity_min_percent', 'humidity_max_percent',
+                       'threshold_severity')}),
+        ('Audit', {'fields': ('updated_at',)}),
+    )
+
+    def has_add_permission(self, request):
+        return not EnvironmentalAlertSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(SensorReading)
@@ -107,6 +133,73 @@ class SensorReadingAdmin(admin.ModelAdmin):
     list_filter = ['device', 'timestamp']
     search_fields = ['device__name']
     # date_hierarchy = 'timestamp'  # Commented out - requires MySQL timezone tables on Windows
+
+
+@admin.register(SensorReadingSummary)
+class SensorReadingSummaryAdmin(admin.ModelAdmin):
+    list_display = [
+        'device', 'sensor_type', 'period_start', 'average_value',
+        'minimum_value', 'maximum_value', 'sample_count',
+    ]
+    list_filter = ['sensor_type', 'device']
+    search_fields = ['device__name', 'device__device_id', 'sensor_type']
+    readonly_fields = [
+        'device', 'sensor_type', 'unit', 'period_start', 'period_end',
+        'average_value', 'minimum_value', 'maximum_value', 'sample_count',
+        'created_at', 'updated_at',
+    ]
+    date_hierarchy = 'period_start'
+
+    def has_add_permission(self, request):
+        return False
+
+
+def _format_bytes(value):
+    size = float(value)
+    for unit in ('B', 'KB', 'MB', 'GB', 'TB'):
+        if size < 1024 or unit == 'TB':
+            return f'{size:.1f} {unit}'
+        size /= 1024
+
+
+@admin.register(SensorStorageSettings)
+class SensorStorageSettingsAdmin(admin.ModelAdmin):
+    fields = [
+        'raw_retention_days', 'cleanup_enabled',
+        'disk_total', 'disk_used', 'disk_available', 'database_size',
+        'last_cleanup_at', 'last_cleanup_deleted', 'total_cleanup_deleted',
+        'updated_at',
+    ]
+    readonly_fields = [
+        'disk_total', 'disk_used', 'disk_available', 'database_size',
+        'last_cleanup_at', 'last_cleanup_deleted', 'total_cleanup_deleted',
+        'updated_at',
+    ]
+
+    def has_add_permission(self, request):
+        return not SensorStorageSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    @admin.display(description='Total storage')
+    def disk_total(self, obj):
+        return _format_bytes(shutil.disk_usage(settings.BASE_DIR).total)
+
+    @admin.display(description='Used storage')
+    def disk_used(self, obj):
+        return _format_bytes(shutil.disk_usage(settings.BASE_DIR).used)
+
+    @admin.display(description='Available storage')
+    def disk_available(self, obj):
+        return _format_bytes(shutil.disk_usage(settings.BASE_DIR).free)
+
+    @admin.display(description='Database size')
+    def database_size(self, obj):
+        database_name = settings.DATABASES['default'].get('NAME')
+        if database_name and os.path.isfile(database_name):
+            return _format_bytes(os.path.getsize(database_name))
+        return 'Available for file-based databases only'
 
 
 class GoatImageInline(admin.TabularInline):

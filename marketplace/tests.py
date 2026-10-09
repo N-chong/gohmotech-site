@@ -2,6 +2,7 @@ from datetime import timedelta
 from decimal import Decimal
 import base64
 from io import BytesIO
+from unittest.mock import patch
 
 from django.contrib.auth.models import Group, User
 from django.conf import settings
@@ -660,6 +661,35 @@ class MarketplaceWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "GT-MKT-001")
         self.assertEqual(response.context["result_count"], 1)
+
+    def test_published_farm_owner_listing_is_visible_in_public_catalog(self):
+        farm_owner = User.objects.create_user("catalog-farm-owner")
+        owner_group, _ = Group.objects.get_or_create(name=FARM_OWNER_GROUP_NAME)
+        farm_owner.groups.add(owner_group)
+        goat = Goat.objects.create(
+            goat_id="GT-OWNER-001",
+            name="Owner Market Goat",
+            breed="boer",
+            gender="male",
+            health_status="healthy",
+            status="active",
+            is_active=True,
+            owner=farm_owner,
+        )
+        listing = MarketplaceListing.objects.create(
+            goat=goat,
+            seller=farm_owner,
+            price=Decimal("15000.00"),
+            sales_description="Published by an authorized farm owner.",
+            status=MarketplaceListing.AVAILABLE,
+            published_at=timezone.now(),
+        )
+
+        catalog = self.client.get(reverse("marketplace:list"))
+        detail = self.client.get(reverse("marketplace:detail", args=[listing.pk]))
+
+        self.assertContains(catalog, "GT-OWNER-001")
+        self.assertEqual(detail.status_code, 200)
 
     def test_detail_renders_slider_for_multiple_goat_images(self):
         GoatImage.objects.create(
@@ -1504,6 +1534,159 @@ class MarketplaceWorkflowTests(TestCase):
         )
         with self.assertRaises(ValidationError):
             blank_message.full_clean()
+
+    def test_buyer_can_send_image_without_text_and_notification_is_generic(self):
+        self.client.force_login(self.buyer)
+
+        response = self.client.post(
+            reverse("marketplace:conversation", args=[self.conversation.pk]),
+            {"body": "", "image_attachment": self.goat_photo("recent-goat.png")},
+        )
+
+        self.assertRedirects(
+            response, reverse("marketplace:conversation", args=[self.conversation.pk])
+        )
+        message = Message.objects.get(conversation=self.conversation)
+        self.assertTrue(message.image_attachment.name.endswith(".png"))
+        self.assertNotIn("recent-goat", message.image_attachment.name)
+        self.assertEqual(message.image_original_name, "recent-goat.png")
+        notification = MarketplaceNotification.objects.get(
+            dedup_key=f"message:{message.pk}"
+        )
+        self.assertEqual(notification.message, "Image attached.")
+
+    def test_seller_can_send_image(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            reverse("marketplace:conversation", args=[self.conversation.pk]),
+            {"body": "", "image_attachment": self.goat_photo("seller-view.png")},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        message = Message.objects.get(conversation=self.conversation)
+        self.assertEqual(message.sender, self.admin)
+        self.assertTrue(message.image_attachment)
+
+    def test_message_can_include_text_and_image_and_renders_both(self):
+        self.client.force_login(self.buyer)
+        self.client.post(
+            reverse("marketplace:conversation", args=[self.conversation.pk]),
+            {
+                "body": "Here is the condition I mean.",
+                "image_attachment": self.goat_photo("condition.png"),
+            },
+        )
+        message = Message.objects.get(conversation=self.conversation)
+
+        response = self.client.get(
+            reverse("marketplace:conversation", args=[self.conversation.pk])
+        )
+
+        self.assertContains(response, "Here is the condition I mean.")
+        self.assertContains(
+            response, reverse("marketplace:inquiry_image", args=[message.pk])
+        )
+        self.assertContains(response, "data-image-viewer")
+        self.assertContains(response, "data-remove-image")
+        self.assertContains(response, "Uploading image")
+
+    def test_unsupported_inquiry_attachment_is_rejected(self):
+        self.client.force_login(self.buyer)
+
+        response = self.client.post(
+            reverse("marketplace:conversation", args=[self.conversation.pk]),
+            {
+                "body": "Unsafe attachment",
+                "image_attachment": SimpleUploadedFile(
+                    "payload.svg",
+                    b"<svg><script>alert(1)</script></svg>",
+                    content_type="image/svg+xml",
+                ),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Select a valid JPG, PNG, or WebP image.")
+        self.assertFalse(Message.objects.filter(conversation=self.conversation).exists())
+
+    def test_oversized_inquiry_image_has_clear_error(self):
+        self.client.force_login(self.buyer)
+        oversized = SimpleUploadedFile(
+            "too-large.png",
+            b"\x89PNG\r\n\x1a\n" + b"0" * (5 * 1024 * 1024),
+            content_type="image/png",
+        )
+
+        response = self.client.post(
+            reverse("marketplace:conversation", args=[self.conversation.pk]),
+            {"body": "", "image_attachment": oversized},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response, "Image is too large. Please select a smaller image."
+        )
+        self.assertFalse(Message.objects.filter(conversation=self.conversation).exists())
+
+    def test_only_conversation_participants_can_fetch_inquiry_image(self):
+        message = Message.objects.create(
+            conversation=self.conversation,
+            sender=self.buyer,
+            body="Private image",
+            image_attachment=self.goat_photo("private.png"),
+            image_original_name="private.png",
+            image_content_type="image/png",
+            image_size=68,
+        )
+        image_url = reverse("marketplace:inquiry_image", args=[message.pk])
+
+        self.client.force_login(self.other_buyer)
+        self.assertEqual(self.client.get(image_url).status_code, 403)
+        self.client.force_login(self.buyer)
+        allowed = self.client.get(image_url)
+        self.assertEqual(allowed.status_code, 200)
+        self.assertEqual(allowed["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(allowed["Cache-Control"], "private, no-store")
+
+    def test_deleting_message_removes_its_private_image(self):
+        message = Message.objects.create(
+            conversation=self.conversation,
+            sender=self.buyer,
+            body="Temporary photo",
+            image_attachment=self.goat_photo("temporary.png"),
+            image_original_name="temporary.png",
+            image_content_type="image/png",
+            image_size=68,
+        )
+        storage = message.image_attachment.storage
+        stored_name = message.image_attachment.name
+        self.assertTrue(storage.exists(stored_name))
+
+        message.delete()
+
+        self.assertFalse(storage.exists(stored_name))
+
+    def test_storage_failure_keeps_conversation_working_and_allows_retry(self):
+        self.client.force_login(self.buyer)
+        storage = Message._meta.get_field("image_attachment").storage
+
+        with patch.object(storage, "_save", side_effect=OSError("storage offline")):
+            response = self.client.post(
+                reverse("marketplace:conversation", args=[self.conversation.pk]),
+                {"body": "Retry me", "image_attachment": self.goat_photo("retry.png")},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response, "The image could not be uploaded. Please try again."
+        )
+        self.assertFalse(Message.objects.filter(conversation=self.conversation).exists())
+        retry = self.client.post(
+            reverse("marketplace:conversation", args=[self.conversation.pk]),
+            {"body": "Retry worked", "image_attachment": self.goat_photo("retry.png")},
+        )
+        self.assertEqual(retry.status_code, 302)
 
     def test_conversation_model_rejects_listing_seller_as_buyer(self):
         invalid = Conversation(listing=self.listing, buyer=self.admin)

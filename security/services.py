@@ -18,6 +18,7 @@ import logging
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.contrib.contenttypes.models import ContentType
+from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,11 @@ def create_or_update_notification(*, title, description='', severity='medium',
     if broadcast:
         broadcast_notification(notification)
 
+    if created:
+        logger.info("[NOTIFICATION] Created id=%s type=%s severity=%s source=%s",
+                    notification.pk, notification.notification_type,
+                    notification.severity, notification.source or '-')
+
     # Fan a newly-raised alert out to SMS (best-effort). Only on `created` so
     # dedup updates and person-detection cooldown folds (which call this with
     # created=False) never re-text. The SMS app authoritatively decides whether
@@ -97,7 +103,16 @@ def _maybe_enqueue_alert_sms(notification):
     notification flow if the SMS app or broker is unavailable."""
     try:
         from sms.tasks import send_alert_sms
-        send_alert_sms.delay(notification.id)
+        # Signals commonly run inside a request transaction. Queue only after
+        # commit so a fast worker cannot look up an uncommitted notification.
+        def enqueue():
+            try:
+                send_alert_sms.delay(notification.id)
+            except Exception:
+                logger.exception("Failed to enqueue alert SMS for #%s",
+                                 notification.id)
+
+        transaction.on_commit(enqueue)
     except Exception as exc:  # pragma: no cover - SMS is best-effort
         logger.error(f"Failed to enqueue alert SMS for #{notification.id}: {exc}")
 

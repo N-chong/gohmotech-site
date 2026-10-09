@@ -1,0 +1,9 @@
+<div class="reservation-progress" aria-label="Reservation progress">
+  <div class="progress-step reached"><span><i class="bi bi-check-lg"></i></span><small>Requested</small></div>
+  <i class="progress-line {% if reservation.status == 'accepted' or reservation.status == 'completed' %}reached{% endif %}"></i>
+  <div class="progress-step {% if reservation.status == 'accepted' or reservation.status == 'completed' %}reached{% endif %}"><span><i class="bi bi-check-lg"></i></span><small>Accepted</small></div>
+  <i class="progress-line {% if reservation.pickup_status == 'confirmed' or reservation.status == 'completed' %}reached{% endif %}"></i>
+  <div class="progress-step {% if reservation.pickup_status == 'confirmed' or reservation.status == 'completed' %}reached{% endif %}"><span><i class="bi bi-check-lg"></i></span><small>Pickup confirmed</small></div>
+  <i class="progress-line {% if reservation.status == 'completed' %}reached{% endif %}"></i>
+  <div class="progress-step {% if reservation.status == 'completed' %}reached{% endif %}"><span><i class="bi bi-check-lg"></i></span><small>Completed</small></div>
+</div>

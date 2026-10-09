@@ -9,12 +9,17 @@ checks = {
     "/marketplace/": 200,
     "/accounts/login/": 200,
     "/static/admin/css/base.css": 200,
-    "/iot/api/actuators/esp32_commands/?device_id=smoke": 403,
-    "/feeding/api/logs/servo-commands/?feeder_id=1": 403,
+    # Depending on the active DRF authenticator ordering, an anonymous device
+    # request is correctly rejected as either unauthenticated (401) or
+    # forbidden without the device key (403).
+    "/iot/api/actuators/esp32_commands/?device_id=smoke": {401, 403},
+    "/feeding/api/logs/servo-commands/?feeder_id=1": {401, 403},
     "/media/seller_documents/missing.pdf": 404,
 }
 
-for path, expected in checks.items():
+for path, expected_statuses in checks.items():
+    if isinstance(expected_statuses, int):
+        expected_statuses = {expected_statuses}
     actual = None
     for attempt in range(10):
         request = urllib.request.Request(
@@ -29,13 +34,16 @@ for path, expected in checks.items():
             exc.close()
         except urllib.error.URLError:
             actual = None
-        if actual == expected:
+        if actual in expected_statuses:
             break
         if actual not in (None, 502, 503):
             break
         time.sleep(1)
-    if actual != expected:
-        raise SystemExit(f"FAIL {path}: expected {expected}, received {actual}")
+    if actual not in expected_statuses:
+        expected_display = "/".join(str(value) for value in sorted(expected_statuses))
+        raise SystemExit(
+            f"FAIL {path}: expected {expected_display}, received {actual}"
+        )
     print(f"PASS {actual} {path}")
 
 manifest_request = urllib.request.Request(

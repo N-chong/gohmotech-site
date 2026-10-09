@@ -92,6 +92,18 @@
         font-size: 0.85rem; font-weight: 600; color: var(--primary-600, var(--primary-500));
         display: inline-flex; align-items: center; gap: 0.35rem;
     }
+    .rc-period-card { padding: var(--spacing-lg); margin-bottom: var(--spacing-lg); }
+    .rc-period-form { display: flex; flex-wrap: wrap; align-items: end; gap: var(--spacing-md); }
+    .rc-period-field { display: flex; flex-direction: column; gap: .35rem; min-width: 180px; }
+    .rc-period-field label { font-size: .75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; }
+    .rc-period-current { margin-left: auto; color: var(--text-secondary); font-size: .875rem; }
+    .rc-events { margin-top: var(--spacing-xl); }
+    .rc-event { display: grid; grid-template-columns: 1fr auto; gap: .35rem 1rem; padding: .9rem 0; border-bottom: 1px solid var(--border-color); }
+    .rc-event:last-child { border-bottom: 0; }
+    .rc-event strong { color: var(--text-primary); }
+    .rc-event p { margin: .2rem 0 0; color: var(--text-secondary); font-size: .85rem; }
+    .rc-event-meta { text-align: right; color: var(--text-tertiary); font-size: .78rem; }
+    .rc-error { color: var(--danger); background: var(--danger-bg); padding: .7rem 1rem; border-radius: var(--radius-md); margin-bottom: var(--spacing-md); }
 
     @media (max-width: 768px) {
         .rc-page-header { margin-bottom: var(--spacing-lg); }
@@ -106,6 +118,11 @@
         .rc-section-title { margin-top: var(--spacing-lg); }
         .rc-grid { grid-template-columns: minmax(0, 1fr); gap: var(--spacing-md); }
         .rc-card { padding: var(--spacing-md); }
+        .rc-period-form { display: grid; grid-template-columns: 1fr; }
+        .rc-period-field, .rc-period-form .btn { width: 100%; }
+        .rc-period-current { margin-left: 0; }
+        .rc-event { grid-template-columns: 1fr; }
+        .rc-event-meta { text-align: left; }
     }
 
     @media (max-width: 420px) {
@@ -126,11 +143,32 @@
         <div>
             <div class="page-eyebrow">Reports</div>
             <h1>Report Center</h1>
-            <p class="page-subtitle">Generate livestock, marketplace, automation and environment reports — view, export and print.</p>
+            <p class="page-subtitle">See what happened on the farm, then open a detailed report to export or print.</p>
         </div>
     </div>
 
-    <!-- Summary (last 7 days for activity counts; herd counts are current) -->
+    {% if period_error %}<div class="rc-error"><i class="bi bi-exclamation-circle"></i> {{ period_error }}</div>{% endif %}
+    <div class="content-card rc-period-card">
+        <form method="get" id="centerPeriodForm" class="rc-period-form">
+            {% for field in dashboard.filter_form %}
+            <div class="rc-period-field{% if field.custom_only %} custom-date-field{% endif %}">
+                <label for="center_{{ field.name }}">{{ field.label }}</label>
+                {% if field.kind == 'select' %}
+                <select id="center_{{ field.name }}" name="{{ field.name }}" class="form-select">
+                    {% for value, label in field.options %}<option value="{{ value }}" {% if value == field.value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+                {% else %}
+                <input id="center_{{ field.name }}" name="{{ field.name }}" type="date" value="{{ field.value }}" class="form-control">
+                {% endif %}
+            </div>
+            {% endfor %}
+            <button type="submit" class="btn btn-primary"><i class="bi bi-calendar-check"></i> Apply period</button>
+            <button type="submit" class="btn btn-outline-primary" formmethod="get" formaction="{% url 'analytics:farm_report_print' %}" formtarget="_blank"><i class="bi bi-file-earmark-pdf"></i> Generate Farm PDF</button>
+            <div class="rc-period-current"><strong>Selected:</strong> {{ dashboard.period.label }}</div>
+        </form>
+    </div>
+
+    <!-- Period-aware farm summary; registered goats is an explicitly labelled current snapshot. -->
     <div class="stat-grid rc-stat-grid">
         {% for card in summary %}
         <div class="stat-card">
@@ -142,7 +180,7 @@
     </div>
     <p class="page-subtitle" style="margin-bottom: var(--spacing-lg); font-size: 0.8rem;">
         <i class="bi bi-info-circle"></i>
-        Activity counts (feeding, door, lighting and marketplace sales) cover the last 7 days. Herd counts are current.
+        Activity cards cover {{ dashboard.period.label }}. Registered Goats is the current farm inventory.
     </p>
 
     <!-- Report picker, grouped by category -->
@@ -152,7 +190,7 @@
     </div>
     <div class="rc-grid">
         {% for card in cards %}
-        <a href="{{ card.url }}" class="rc-card">
+        <a href="{{ card.url }}{% if card.time_based %}?period={{ dashboard.period.key }}&amp;start_date={{ dashboard.period.start_date|date:'Y-m-d' }}&amp;end_date={{ dashboard.period.end_date|date:'Y-m-d' }}{% endif %}" class="rc-card">
             <div class="rc-card-top">
                 <div class="rc-card-icon {{ card.color }}"><i class="bi {{ card.icon }}"></i></div>
                 <div class="rc-card-title">{{ card.title }}</div>
@@ -164,5 +202,35 @@
     </div>
     {% endfor %}
 
+    <section class="content-card rc-period-card rc-events">
+        <div class="card-header-custom">
+            <h5><i class="bi bi-bell"></i> Important Events and Alerts</h5>
+            <span class="page-subtitle">{{ dashboard.period.label }}</span>
+        </div>
+        {% for event in dashboard.recent_events %}
+        <div class="rc-event">
+            <div><strong>{{ event.title }}</strong><p>{{ event.description|default:"No additional details."|truncatechars:180 }}</p></div>
+            <div class="rc-event-meta">{{ event.severity }} · {{ event.source }}<br>{{ event.created_at|date:"M d, Y H:i" }} · {% if event.resolved %}Resolved{% else %}Open{% endif %}</div>
+        </div>
+        {% empty %}
+        <div class="empty-state"><i class="bi bi-check-circle"></i><h5>No events recorded</h5><p>No alerts or important events were recorded during this reporting period.</p></div>
+        {% endfor %}
+    </section>
+
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const period = document.getElementById('center_period');
+    const customFields = document.querySelectorAll('.custom-date-field');
+    function toggleCustomDates() {
+        const show = period && period.value === 'custom';
+        customFields.forEach(function (field) { field.hidden = !show; });
+    }
+    if (period) period.addEventListener('change', toggleCustomDates);
+    toggleCustomDates();
+}());
+</script>
 {% endblock %}

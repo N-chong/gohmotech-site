@@ -1,9 +1,11 @@
 from unittest.mock import patch
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from marketplace.auth import FARM_OWNER_GROUP_NAME
 
@@ -54,6 +56,30 @@ class MonitoringSensorReadingDisplayTests(TestCase):
         self.assertContains(response, "50.0%")
         self.assertNotContains(response, "No environmental data available")
 
+    @patch("iot.views.get_farm_weather", return_value={"available": False})
+    def test_monitoring_waits_thirty_minutes_before_showing_offline(self, _weather):
+        recent = Device.objects.create(
+            device_id="recent-board",
+            name="Recent board",
+            device_type="environmental_sensor",
+            last_sensor_received_at=timezone.now() - timedelta(minutes=29),
+        )
+        stale = Device.objects.create(
+            device_id="stale-board",
+            name="Stale board",
+            device_type="environmental_sensor",
+            last_sensor_received_at=timezone.now() - timedelta(minutes=31),
+        )
+
+        response = self.client.get(reverse("iot:monitoring_dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["online_device_count"], 1)
+        self.assertEqual(response.context["offline_device_count"], 1)
+        devices = {device.device_id: device for device in response.context["devices"]}
+        self.assertTrue(devices[recent.device_id].monitoring_online)
+        self.assertFalse(devices[stale.device_id].monitoring_online)
+
 
 class AutomationScheduleTimeDisplayTests(TestCase):
     def setUp(self):
@@ -97,4 +123,3 @@ class AutomationScheduleTimeDisplayTests(TestCase):
         self.assertContains(response, "19:45")
         self.assertContains(response, "21:10")
         self.assertNotContains(response, "Time not set")
-

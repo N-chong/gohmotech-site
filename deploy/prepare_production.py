@@ -55,7 +55,7 @@ production_env.chmod(0o600)
 
 beta_data = Path(source["BETA_DATA_ROOT"]).resolve()
 production_data.mkdir(parents=True, exist_ok=False, mode=0o700)
-for name in ("media", "static", "private_support", "protected_models"):
+for name in ("media", "static", "private_support", "private_inquiries", "protected_models"):
     source_dir = beta_data / name
     destination = production_data / name
     if source_dir.is_dir():

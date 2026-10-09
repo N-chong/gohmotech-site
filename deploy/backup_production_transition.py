@@ -80,6 +80,7 @@ uploads = target / "uploads.tar.gz"
 with tarfile.open(uploads, "w:gz") as archive:
     add_tree(archive, data_root / "media", "media")
     add_tree(archive, data_root / "private_support", "private_support")
+    add_tree(archive, data_root / "private_inquiries", "private_inquiries")
     add_tree(archive, data_root / "protected_models", "protected_models")
 
 private_environment = target / "environment.env"

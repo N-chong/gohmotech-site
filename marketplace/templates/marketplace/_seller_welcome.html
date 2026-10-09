@@ -1,0 +1,22 @@
+{% if system_role == 'marketplace' and is_approved_seller and seller_profile.status == 'approved' %}
+  {% if request.resolver_match.url_name == 'landing' or request.resolver_match.url_name == 'seller_dashboard' or request.resolver_match.url_name == 'seller_application' %}
+  <section class="store-container seller-welcome-wrap" aria-labelledby="seller-welcome-title">
+    <div class="seller-welcome-banner">
+      <span class="seller-welcome-icon" aria-hidden="true"><i class="bi bi-patch-check-fill"></i></span>
+      <div class="seller-welcome-copy">
+        <span class="seller-welcome-label">Application approved</span>
+        <h2 id="seller-welcome-title">Welcome, Verified Seller!</h2>
+        <p>Congratulations, {{ user.first_name|default:user.username }}! Your seller application has been approved. You can now add your goats, publish listings, and connect with buyers on GoHMoTech.</p>
+        <div class="seller-welcome-actions">
+          {% if request.resolver_match.url_name == 'seller_dashboard' %}
+          <a class="button button-primary" href="{% url 'marketplace:seller_goat_add' %}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add a Goat</a>
+          {% else %}
+          <a class="button button-primary" href="{% url 'marketplace:seller_dashboard' %}"><i class="bi bi-shop" aria-hidden="true"></i> Go to Seller Dashboard</a>
+          {% endif %}
+          <button class="button button-ghost" type="button" data-onboarding-replay><i class="bi bi-compass" aria-hidden="true"></i> Take Seller Tour</button>
+        </div>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+{% endif %}

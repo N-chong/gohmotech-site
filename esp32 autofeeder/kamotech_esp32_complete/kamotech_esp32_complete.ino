@@ -61,9 +61,10 @@ const char* actuatorUrl = "http://10.87.22.155:8000/iot/api/actuator-state/";
 const char* deviceId = "kamotech_esp32_001";
 const char* deviceName = "kamotech esp32";
 
-// NTP Time Server Configuration (fixes timezone issue)
+// NTP provides an absolute UTC clock. Asia/Manila conversion is done once by
+// Django when rendering for the farm owner.
 const char* ntpServer = "pool.ntp.org";
-const long gmtOffset_sec = 28800;      // GMT+8 for Philippines (8 hours * 3600 seconds)
+const long gmtOffset_sec = 0;
 const int daylightOffset_sec = 0;      // No daylight saving in Philippines
 
 // Pin Definitions
@@ -482,7 +483,8 @@ void sendDataToServer() {
   
   Serial.println("\n📤 Sending data to Django server...");
   
-  // Create JSON payload (Django will add the timestamp automatically)
+  // Create JSON payload. Send UTC only after NTP has a plausible epoch;
+  // otherwise omission makes Django use its server receipt time.
   StaticJsonDocument<512> doc;
   doc["device_id"] = deviceId;
   doc["device_name"] = deviceName;
@@ -498,7 +500,15 @@ void sendDataToServer() {
   if (airQualityCalibrated) {
     doc["air_quality_ppm"] = airQualityPpm;
   }
-  // No timestamp field - Django will use server time (more accurate!)
+  time_t measuredAt = time(nullptr);
+  if (measuredAt >= 1704067200) {
+    struct tm utcTime;
+    char timestampUtc[25];
+    gmtime_r(&measuredAt, &utcTime);
+    if (strftime(timestampUtc, sizeof(timestampUtc), "%Y-%m-%dT%H:%M:%SZ", &utcTime) > 0) {
+      doc["timestamp"] = timestampUtc;
+    }
+  }
   
   String jsonString;
   serializeJson(doc, jsonString);

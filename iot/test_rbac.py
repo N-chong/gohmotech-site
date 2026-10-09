@@ -38,14 +38,26 @@ class FarmRoleAccessTests(TestCase):
     def test_owner_can_operate_farm_but_not_system_administration(self):
         self.assert_get_status(
             self.owner,
-            ["/iot/owner/", "/iot/monitoring/", "/iot/automation/", "/security/", "/analytics/"],
+            ["/iot/owner/", "/iot/monitoring/", "/iot/automation/", "/security/", "/analytics/", "/iot/devices/"],
             200,
         )
         self.assert_get_status(
             self.owner,
-            ["/iot/devices/", "/sms/", "/marketplace/manage/", "/ml/models/"],
+            ["/sms/", "/marketplace/manage/", "/ml/models/"],
             403,
         )
+
+    def test_owner_navigation_is_grouped_and_keeps_key_features_accessible(self):
+        self.client.force_login(self.owner)
+        response = self.client.get("/iot/owner/")
+        self.assertContains(response, ">Farm<")
+        self.assertContains(response, ">Monitoring<")
+        self.assertContains(response, ">Records<")
+        self.assertContains(response, ">Device Status<")
+        self.assertContains(response, ">Help &amp; Settings<")
+        self.assertContains(response, reverse("feeding:dashboard"))
+        self.assertContains(response, reverse("ml_models:detection_feed"))
+        self.assertContains(response, reverse("analytics:dashboard"))
 
     def test_operator_can_only_open_monitoring_pages(self):
         self.assert_get_status(

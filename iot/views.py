@@ -18,17 +18,21 @@ import base64
 import re
 
 logger = logging.getLogger(__name__)
-from .models import Device, SensorData, Alert, ActuatorState, AutomationRule, ActuationLog, SensorReading
+from .models import (
+    Device, SensorData, Alert, ActuatorState, AutomationRule, ActuationLog,
+    SensorReading, SensorReadingSummary,
+)
 from .serializers import (
     DeviceSerializer, SensorDataSerializer, AlertSerializer,
     ActuatorStateSerializer, AutomationRuleSerializer, ActuationLogSerializer,
-    SensorReadingSerializer
+    SensorReadingSerializer, SensorReadingSummarySerializer,
 )
 from .forms import BLEBeaconForm, GoatForm
 from .ble_services import build_tracking_snapshot
 from .weather_service import get_farm_weather
 from .status_utils import (
-    MAIN_CONTROLLER_DEVICE_ID, is_device_online, controller_status, system_status,
+    MAIN_CONTROLLER_DEVICE_ID, camera_status_summary, controller_status,
+    device_last_seen, is_device_online, system_status,
 )
 from .device_authentication import HasLegacyDeviceKey
 from .goat_photos import photo_slots, prepared_standard_photos, save_standard_photo
@@ -206,6 +210,14 @@ class SensorReadingViewSet(viewsets.ModelViewSet):
     queryset = SensorReading.objects.all()
     serializer_class = SensorReadingSerializer
     filterset_fields = ['device', 'timestamp']
+
+    def get_authenticators(self):
+        # ESP32 uploads authenticate with the dedicated device header, not a
+        # user token. Skipping user authenticators for collection POSTs keeps
+        # missing/invalid device credentials a clear 403 device-auth failure.
+        if self.request.method == 'POST':
+            return []
+        return super().get_authenticators()
     
     def get_permissions(self):
         """Require the device key for ESP32 writes and farm RBAC for reads."""
@@ -229,6 +241,14 @@ class SensorReadingViewSet(viewsets.ModelViewSet):
             reading.light_level_percentage,
             reading.air_quality_raw,
         )
+        try:
+            from .monitoring import evaluate_sensor_reading
+            evaluate_sensor_reading(reading)
+        except Exception:
+            # Persisting telemetry is more important than alert fan-out; the
+            # periodic health task provides another observable evaluation path.
+            logger.exception("[ALERT] Sensor reading evaluation failed for %s",
+                             reading.pk)
         
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
@@ -269,6 +289,15 @@ class SensorReadingViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(readings, many=True)
         return Response(serializer.data)
+
+
+class SensorReadingSummaryViewSet(viewsets.ReadOnlyModelViewSet):
+    """Read-only long-term, 30-minute historical sensor records."""
+
+    queryset = SensorReadingSummary.objects.select_related('device').all()
+    serializer_class = SensorReadingSummarySerializer
+    permission_classes = [FarmRolePermission]
+    filterset_fields = ['device', 'sensor_type', 'period_start', 'period_end']
 
 
 # ============ Client-Facing Views ============
@@ -697,19 +726,23 @@ def _save_captured_photo(goat, data_url):
         return None
 
 
-@staff_required
+@farm_access_required
 def devices_list(request):
-    """Display list of all IoT devices"""
+    """Display a read-only, owner-friendly status list for farm devices."""
     devices = Device.objects.all().order_by('-is_active', 'name')
     
     # Get latest sensor reading for each device
     for device in devices:
-        device.latest_reading = SensorData.objects.filter(device=device).order_by('-timestamp').first()
+        device.latest_reading = (
+            SensorReading.objects.filter(device=device).order_by('-timestamp').first()
+            or SensorData.objects.filter(device=device).order_by('-timestamp').first()
+        )
+        device.is_online = is_device_online(device)
     
     # Statistics
     total_devices = devices.count()
-    active_devices = devices.filter(is_active=True).count()
-    inactive_devices = total_devices - active_devices
+    online_devices = sum(1 for device in devices if device.is_online)
+    offline_devices = total_devices - online_devices
     
     # Device type breakdown
     device_types = devices.values('device_type').annotate(count=Count('id'))
@@ -717,15 +750,15 @@ def devices_list(request):
     context = {
         'devices': devices,
         'total_devices': total_devices,
-        'active_devices': active_devices,
-        'inactive_devices': inactive_devices,
+        'active_devices': online_devices,
+        'inactive_devices': offline_devices,
         'device_types': device_types,
-        'page_title': 'IoT Devices'
+        'page_title': 'Device Status'
     }
     return render(request, 'iot/devices_list.html', context)
 
 
-@staff_required
+@farm_access_required
 def device_detail(request, device_id):
     """Display detailed information about a specific device"""
     device = get_object_or_404(Device, device_id=device_id)
@@ -797,9 +830,23 @@ def camera_detail(request, camera_id):
 
 @farm_access_required
 def monitoring_dashboard(request):
-    """Main monitoring dashboard showing real-time status of all systems"""
+    """Read-only operational view of current farm conditions and equipment."""
+    # Monitoring is a human-facing overview, so avoid alarming owners during a
+    # brief Wi-Fi gap. The stale-sensor alert policy uses the same 30-minute
+    # minimum so the dashboard and SMS notifications remain consistent.
+    monitoring_window_seconds = 30 * 60
+
     # Get active devices
     devices = Device.objects.filter(is_active=True)
+    online_device_count = 0
+    for device in devices:
+        device.monitoring_online = is_device_online(
+            device, window_seconds=monitoring_window_seconds
+        )
+        device.monitoring_last_seen = device_last_seen(device)
+        if device.monitoring_online:
+            online_device_count += 1
+    offline_device_count = devices.count() - online_device_count
     
     # Current firmware writes combined snapshots to SensorReading. SensorData
     # is retained only as a fallback for older installations.
@@ -816,6 +863,17 @@ def monitoring_dashboard(request):
     latest_sensor_reading = SensorReading.objects.filter(
         Q(temperature__isnull=False) | Q(humidity__isnull=False)
     ).select_related('device').order_by('-timestamp').first()
+    environment_online = (
+        is_device_online(
+            latest_sensor_reading.device,
+            window_seconds=monitoring_window_seconds,
+        )
+        if latest_sensor_reading else False
+    )
+    environment_last_seen = (
+        device_last_seen(latest_sensor_reading.device)
+        if latest_sensor_reading else None
+    )
     
     # Get all latest environmental readings
     latest_environmental_readings = []
@@ -826,8 +884,9 @@ def monitoring_dashboard(request):
     
     # Get active alerts
     active_alerts = Alert.objects.filter(is_resolved=False).order_by('-created_at')[:20]
+    active_alert_count = Alert.objects.filter(is_resolved=False).count()
     
-    # Environmental conditions from the active aggregated SensorReading table.
+    # Live conditions come from the newest raw SensorReading, never a summary.
     # Query each measurement independently because the split ESP32 boards own
     # different sensors. Fall back to legacy SensorData when necessary.
     latest_conditions = {}
@@ -837,6 +896,7 @@ def monitoring_dashboard(request):
         'soil_moisture': 'soil_moisture',
         'light_level': 'light_level_percentage',
         'air_quality': 'air_quality_raw',
+        'rain': 'rain_detected',
     }
     for condition_name, model_field in condition_fields.items():
         latest = SensorReading.objects.filter(
@@ -873,18 +933,17 @@ def monitoring_dashboard(request):
     
     # Goat detection stats
     latest_goat_count = None
+    latest_detection = None
     if Detection:
         latest_detection = Detection.objects.order_by('-timestamp').first()
         if latest_detection:
             latest_goat_count = latest_detection.goat_count
     
     # Camera status
-    camera = None
-    camera_status = 'offline'
-    if IPCamera:
-        camera = IPCamera.objects.filter(is_active=True).first()
-        if camera:
-            camera_status = camera.status if hasattr(camera, 'status') else 'online'
+    camera_summary = camera_status_summary()
+    camera = camera_summary['camera']
+    camera_status = camera_summary['status'] or 'not configured'
+    camera_online = camera_summary['online']
     
     # Automation system status
     door_actuators = ActuatorState.objects.filter(actuator_type='door').select_related('device')
@@ -901,6 +960,16 @@ def monitoring_dashboard(request):
         feeding_enabled = config.is_enabled
     if FeedLevel:
         feeders_count = FeedLevel.objects.count()
+        latest_feed_level = (
+            FeedLevel.objects.select_related('feeder').order_by('-updated_at').first()
+        )
+        if latest_feed_level:
+            measured_percentage = latest_feed_level.percentage
+            if measured_percentage is None:
+                measured_percentage = latest_feed_level.percentage_full
+            latest_feed_level.display_percentage = round(measured_percentage, 1)
+    else:
+        latest_feed_level = None
     
     # System health score (simple calculation)
     health_score = 100
@@ -910,29 +979,76 @@ def monitoring_dashboard(request):
         health_score -= ((total_goats - healthy_goats) / total_goats) * 20
     health_score = max(0, health_score)
 
+    # A short, mixed timeline is more useful here than separate alert and
+    # automation logs. Complete histories remain available in their own pages.
+    recent_activity = []
+    for alert in active_alerts[:6]:
+        recent_activity.append({
+            'timestamp': alert.created_at,
+            'kind': 'alert',
+            'tone': 'danger' if alert.severity in ('high', 'critical') else 'warning',
+            'icon': 'bi-exclamation-triangle-fill',
+            'title': alert.message,
+            'detail': f"{alert.device.name} · {alert.get_severity_display()} priority",
+        })
+    for log in recent_actuations[:6]:
+        recent_activity.append({
+            'timestamp': log.timestamp,
+            'kind': 'automation',
+            'tone': 'danger' if log.result == 'failed' else 'neutral',
+            'icon': 'bi-gear-fill',
+            'title': f"{log.device.name}: {log.get_action_display()}",
+            'detail': f"{log.get_source_display()} · {log.get_result_display()}",
+        })
+    recent_activity.sort(key=lambda item: item['timestamp'], reverse=True)
+    recent_activity = recent_activity[:6]
+
+    camera_needs_attention = camera_summary['configured'] and not camera_online
+    if active_alert_count or offline_device_count or camera_needs_attention:
+        farm_status = 'attention'
+        farm_status_label = 'Attention required'
+    elif devices.exists():
+        farm_status = 'normal'
+        farm_status_label = 'All monitored systems normal'
+    else:
+        farm_status = 'setup'
+        farm_status_label = 'Monitoring setup required'
+
     weather_info = get_farm_weather()
     
     context = {
         'devices': devices,
+        'online_device_count': online_device_count,
+        'offline_device_count': offline_device_count,
         'recent_readings': recent_readings,
         'recent_data': recent_data,
         'recent_reading_count': len(recent_readings) or len(recent_data),
         'active_alerts': active_alerts,
+        'active_alert_count': active_alert_count,
         'latest_conditions': latest_conditions,
         'latest_sensor_reading': latest_sensor_reading,  # DHT21 data
+        'environment_online': environment_online,
+        'environment_last_seen': environment_last_seen,
         'latest_environmental_readings': latest_environmental_readings,  # All environmental sensors
         'latest_grass': latest_grass,
         'total_goats': total_goats,
         'healthy_goats': healthy_goats,
         'latest_goat_count': latest_goat_count,
+        'latest_detection': latest_detection,
         'camera': camera,
         'camera_status': camera_status,
+        'camera_online': camera_online,
         'door_actuators': door_actuators,
         'light_actuators': light_actuators,
         'recent_actuations': recent_actuations,
         'feeding_enabled': feeding_enabled,
         'feeders_count': feeders_count,
+        'latest_feed_level': latest_feed_level,
         'health_score': health_score,
+        'recent_activity': recent_activity,
+        'farm_status': farm_status,
+        'farm_status_label': farm_status_label,
+        'dashboard_updated_at': timezone.now(),
         'weather_info': weather_info,
         'page_title': 'System Monitoring'
     }

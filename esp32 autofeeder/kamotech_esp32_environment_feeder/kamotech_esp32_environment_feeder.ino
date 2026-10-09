@@ -15,6 +15,7 @@
 #include <DHT.h>
 #include <ArduinoJson.h>
 #include <ESP32Servo.h>
+#include <time.h>
 
 // Network configuration supplied for this installation.
 const char* WIFI_SSID = "@MIRANDA";
@@ -28,6 +29,8 @@ const char* DEVICE_NAME = "Kamotech Environment Feeder Controller";
 
 // Copy the configured Django IOT_DEVICE_API_KEY here before uploading.
 const char* DEVICE_API_KEY = "YOUR_DEVICE_API_KEY";
+const char* NTP_SERVER_PRIMARY = "pool.ntp.org";
+const char* NTP_SERVER_FALLBACK = "time.google.com";
 
 #define DHT_PIN 14
 #define DHT_TYPE DHT21
@@ -71,6 +74,33 @@ unsigned long lastSensorRead = 0;
 unsigned long lastSensorSend = 0;
 unsigned long lastCommandCheck = 0;
 unsigned long lastWiFiAttempt = 0;
+bool clockConfigured = false;
+
+bool formatMeasurementTimeUtc(char* output, size_t outputSize) {
+  time_t now = time(nullptr);
+  // A reset ESP32 begins near the Unix epoch. Never upload that bogus time;
+  // omission tells Django to use its server receipt time safely.
+  if (now < 1704067200) return false;  // 2024-01-01T00:00:00Z
+
+  struct tm utcTime;
+  gmtime_r(&now, &utcTime);
+  return strftime(output, outputSize, "%Y-%m-%dT%H:%M:%SZ", &utcTime) > 0;
+}
+
+void configureUtcClock() {
+  if (clockConfigured || WiFi.status() != WL_CONNECTED) return;
+  // NTP returns an absolute UTC epoch. Keep the device clock in UTC; Manila
+  // conversion belongs only in Django's presentation layer.
+  configTime(0, 0, NTP_SERVER_PRIMARY, NTP_SERVER_FALLBACK);
+  clockConfigured = true;
+
+  for (int attempt = 0; attempt < 10 && time(nullptr) < 1704067200; attempt++) {
+    delay(500);
+  }
+  Serial.println(time(nullptr) >= 1704067200
+    ? "NTP clock synchronized in UTC"
+    : "NTP unavailable; server will timestamp readings until synchronization");
+}
 
 void addDeviceHeaders(HTTPClient& http) {
   http.addHeader("X-GoHMotech-Device-Key", DEVICE_API_KEY);
@@ -93,6 +123,7 @@ void connectWiFi() {
     Serial.println("\nWiFi connected");
     Serial.print("ESP32 IP: ");
     Serial.println(WiFi.localIP());
+    configureUtcClock();
   } else {
     Serial.println("\nWiFi connection failed; retrying later");
   }
@@ -167,6 +198,10 @@ void sendSensorReading() {
   doc["air_quality_voltage"] = airQualityVoltage;
   doc["air_quality_calibrated"] = airQualityCalibrated;
   if (airQualityCalibrated) doc["air_quality_ppm"] = airQualityPpm;
+  char measuredAt[25];
+  if (formatMeasurementTimeUtc(measuredAt, sizeof(measuredAt))) {
+    doc["timestamp"] = measuredAt;
+  }
 
   String body;
   serializeJson(doc, body);

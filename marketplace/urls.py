@@ -49,6 +49,7 @@ urlpatterns = [
     path("listing/<int:pk>/favorite/", views.toggle_favorite, name="toggle_favorite"),
     path("listing/<int:pk>/report/", views.report_listing, name="report_listing"),
     path("conversation/<int:pk>/", views.conversation_detail, name="conversation"),
+    path("inquiry-image/<int:pk>/", views.inquiry_image, name="inquiry_image"),
     path("conversation/<int:pk>/status/", views.conversation_status, name="conversation_status"),
     path("conversation/<int:pk>/reserve/", views.confirm_purchase, name="confirm_purchase"),
     path("reservation/<int:pk>/pickup/", views.pickup_request, name="pickup"),
