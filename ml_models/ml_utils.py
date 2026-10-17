@@ -21,6 +21,67 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _inspect_rfdetr_checkpoint(model_path: str) -> Dict:
+    """Safely identify legacy RF-DETR checkpoints and basic architecture facts.
+
+    Older Roboflow/RF-DETR ``weights.pt`` files often omit ``model_name`` and
+    ``pretrain_weights``.  RF-DETR therefore cannot auto-select a model class,
+    even though the state dict contains enough information to distinguish the
+    Nano and Small variants.  Only ``weights_only=True`` is used here because
+    uploaded checkpoints are untrusted.
+    """
+    if not str(model_path).lower().endswith(('.pt', '.pth', '.ckpt')):
+        return {}
+
+    try:
+        import torch
+
+        checkpoint = torch.load(model_path, map_location='cpu', weights_only=True)
+        if not isinstance(checkpoint, dict):
+            return {}
+        state_dict = checkpoint.get('model')
+        if not isinstance(state_dict, dict):
+            return {}
+
+        keys = list(state_dict.keys())
+        if not (
+            any(key.startswith('transformer.decoder.layers.') for key in keys)
+            and any('enc_out_class_embed' in key for key in keys)
+        ):
+            return {}
+
+        decoder_indexes = []
+        for key in keys:
+            prefix = 'transformer.decoder.layers.'
+            if key.startswith(prefix):
+                value = key[len(prefix):].split('.', 1)[0]
+                if value.isdigit():
+                    decoder_indexes.append(int(value))
+        decoder_layers = max(decoder_indexes, default=-1) + 1
+        # Nano and Small have unique decoder depths. Medium and current Large
+        # both use four layers, so they must remain user-selected.
+        inferred_variant = {2: 'nano', 3: 'small'}.get(decoder_layers)
+
+        class_count = None
+        for key, tensor in state_dict.items():
+            if key.endswith('enc_out_class_embed.0.weight') and hasattr(tensor, 'shape'):
+                class_count = max(1, int(tensor.shape[0]) - 1)
+                break
+
+        return {
+            'is_rfdetr': True,
+            'variant': inferred_variant,
+            'decoder_layers': decoder_layers,
+            'class_count': class_count,
+        }
+    except Exception:
+        # Format inspection is advisory. The real loader below remains the
+        # source of truth and will provide the validation failure.
+        logger.debug("Could not inspect checkpoint format: %s", model_path,
+                     exc_info=True)
+        return {}
+
+
 class BaseDetector:
     """Base class for all detectors"""
     
@@ -442,7 +503,17 @@ class RFDETRDetector(BaseDetector):
 
         metadata = _unused.get('metadata') or {}
         rfdetr_metadata = metadata.get('rfdetr', metadata)
-        variant = str(rfdetr_metadata.get('variant', 'nano')).lower()
+        checkpoint_facts = _inspect_rfdetr_checkpoint(model_path)
+        requested_variant = str(rfdetr_metadata.get('variant', 'auto')).lower()
+        inferred_variant = checkpoint_facts.get('variant')
+        variant = requested_variant
+        if inferred_variant and requested_variant in {'auto', 'nano', 'small'}:
+            if requested_variant not in {'auto', inferred_variant}:
+                logger.warning(
+                    "RF-DETR checkpoint architecture is %s, not the configured %s; "
+                    "using the checkpoint architecture.", inferred_variant, requested_variant,
+                )
+            variant = inferred_variant
         variants = {
             'nano': RFDETRNano,
             'small': RFDETRSmall,
@@ -459,11 +530,14 @@ class RFDETRDetector(BaseDetector):
                 model_class = variants.get(variant)
                 if model_class is None:
                     raise ValueError(f"Unsupported RF-DETR variant: {variant}")
-                self.model = model_class(
-                    pretrain_weights=str(model_path),
-                    device=device,
-                    trust_checkpoint=False,
-                )
+                constructor_options = {
+                    'pretrain_weights': str(model_path),
+                    'device': device,
+                    'trust_checkpoint': False,
+                }
+                if checkpoint_facts.get('class_count'):
+                    constructor_options['num_classes'] = checkpoint_facts['class_count']
+                self.model = model_class(**constructor_options)
         except Exception as exc:
             raise ValueError(
                 f"Unable to load this RF-DETR {variant} checkpoint safely. Check "
@@ -472,7 +546,23 @@ class RFDETRDetector(BaseDetector):
             ) from exc
 
         self.device = device
-        self.class_names = list(getattr(self.model, 'class_names', []) or [])
+        configured_names = rfdetr_metadata.get('class_names')
+        class_count = checkpoint_facts.get('class_count')
+        default_label = (
+            rfdetr_metadata.get('default_label')
+            or metadata.get('default_label')
+            or metadata.get('category')
+            or 'goat'
+        )
+        if isinstance(configured_names, (list, tuple)) and configured_names:
+            self.class_names = [str(name) for name in configured_names]
+        elif class_count == 1:
+            # RF-DETR legacy checkpoints do not preserve custom class names;
+            # using the bundled COCO names would incorrectly label class 0 as
+            # "person" for a one-class goat model.
+            self.class_names = [str(default_label)]
+        else:
+            self.class_names = list(getattr(self.model, 'class_names', []) or [])
         logger.info("RF-DETR model loaded: %s on %s", model_path, device)
 
     def detect(self, image: np.ndarray) -> Dict:
@@ -497,10 +587,17 @@ class RFDETRDetector(BaseDetector):
             for box, confidence, class_id in zip(
                     xyxy_values, confidence_values, class_values):
                 x1, y1, x2, y2 = [float(value) for value in box]
-                class_id = int(class_id)
-                label = (self.class_names[class_id]
-                         if 0 <= class_id < len(self.class_names)
-                         else str(class_id))
+                raw_class_id = int(class_id)
+                if len(self.class_names) == 1:
+                    # RF-DETR releases/checkpoints differ on whether a
+                    # single foreground class is reported as 0 or 1.
+                    class_id = 0
+                    label = self.class_names[0]
+                else:
+                    class_id = raw_class_id
+                    label = (self.class_names[class_id]
+                             if 0 <= class_id < len(self.class_names)
+                             else str(class_id))
                 detections.append({
                     'bbox': {
                         'x': x1,
@@ -806,6 +903,15 @@ def get_detector(model_type: str, model_path: str, **kwargs) -> BaseDetector:
     model_type = model_type.lower()
     
     if model_type in ['yolov8', 'ultralytics']:
+        # A .pt suffix alone cannot distinguish Ultralytics from RF-DETR.
+        # Recover gracefully when an RF-DETR checkpoint was uploaded with the
+        # YOLO selector, which otherwise makes an active model unusable.
+        if _inspect_rfdetr_checkpoint(model_path).get('is_rfdetr'):
+            logger.warning(
+                "Checkpoint %s is RF-DETR although model_type is %s; using RF-DETR.",
+                model_path, model_type,
+            )
+            return RFDETRDetector(model_path, **kwargs)
         return YOLOv8Detector(model_path, **kwargs)
     elif model_type in ['rfdetr', 'rf-detr', 'rf_detr']:
         return RFDETRDetector(model_path, **kwargs)
@@ -878,6 +984,10 @@ def detect_and_identify_goats(image: np.ndarray, detector, camera,
     """
     # Step 1: Run YOLOv8 detection
     detection_result = detector.detect(image)
+    if detection_result.get('error'):
+        raise RuntimeError(
+            f"Detector inference failed: {detection_result['error']}"
+        )
     
     if not enable_reid or detection_result['count'] == 0:
         # Return detection results only

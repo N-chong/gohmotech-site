@@ -4,7 +4,9 @@
 {% block title %}{{ camera.name }} - GoHMoTech{% endblock %}
 
 {% block content %}
+<div class="d-none" id="camera-detection-csrf-token">{% csrf_token %}</div>
 <div class="container-fluid py-4">
+    {% include 'monitoring_nav.html' %}
     <div class="row mb-4">
         <div class="col-12">
             <nav aria-label="breadcrumb">
@@ -33,7 +35,7 @@
                 <div class="card-body p-0">
                     <div style="position: relative; background: #000; aspect-ratio: 16 / 9;" id="camera-container">
                         {% if camera.is_active %}
-                            <img data-live-camera data-camera-id="{{ camera.id }}" data-feed-url="{% url 'iot:camera_feed' camera.id %}?fps=10&quality=70&width=960"
+                            <img data-live-camera data-camera-id="{{ camera.id }}" data-feed-url="{% url 'iot:camera_feed' camera.id %}?fps=3&quality=45&width=640"
                                  alt="{{ camera.name }}"
                                  id="camera-image"
                                  style="width: 100%; height: 100%; object-fit: contain; display: block;">
@@ -79,9 +81,6 @@
                                 <i class="bi bi-camera"></i> Snapshot
                             </a>
                         </div>
-                        <a href="{% url 'iot:cameras_list' %}" class="btn btn-sm btn-secondary">
-                            <i class="bi bi-arrow-left"></i> Back to Cameras
-                        </a>
                     </div>
                 </div>
             </div>
@@ -179,6 +178,7 @@
 let detectionInterval = null;
 let isDetecting = false;
 let detectionPending = false;
+let latestDetectionData = null;
 
 // Live state now reflects decoded browser frames, not just backend status.
 
@@ -204,6 +204,7 @@ function stopDetection() {
     document.getElementById('start-detection-btn').classList.remove('d-none');
     
     // Clear canvas
+    latestDetectionData = null;
     const canvas = document.getElementById('bbox-canvas');
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -236,7 +237,9 @@ async function runDetection() {
         const response = await fetch('/ml/api/detect/', {
             method: 'POST',
             headers: {
-                'X-CSRFToken': getCookie('csrftoken')
+                'X-CSRFToken': document.querySelector(
+                    '#camera-detection-csrf-token [name=csrfmiddlewaretoken]'
+                ).value
             },
             body: formData
         });
@@ -271,13 +274,28 @@ function showError(message) {
 function drawDetections(data) {
     const img = document.getElementById('camera-image');
     const canvas = document.getElementById('bbox-canvas');
+    const container = document.getElementById('camera-container');
+    if (!img || !canvas || !container || !img.naturalWidth || !img.naturalHeight) return;
+    latestDetectionData = data;
     const ctx = canvas.getContext('2d');
     
-    // Set canvas size to match image
+    // Match the visible frame inside the object-fit: contain image element.
+    // The element itself fills the 16:9 container, but the frame may not.
+    const imageRect = img.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const scale = Math.min(imageRect.width / img.naturalWidth,
+                           imageRect.height / img.naturalHeight);
+    if (!scale) return;
+    const frameWidth = img.naturalWidth * scale;
+    const frameHeight = img.naturalHeight * scale;
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
-    canvas.style.width = img.offsetWidth + 'px';
-    canvas.style.height = img.offsetHeight + 'px';
+    canvas.style.left = (imageRect.left - containerRect.left +
+                         (imageRect.width - frameWidth) / 2) + 'px';
+    canvas.style.top = (imageRect.top - containerRect.top +
+                        (imageRect.height - frameHeight) / 2) + 'px';
+    canvas.style.width = frameWidth + 'px';
+    canvas.style.height = frameHeight + 'px';
     
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -297,59 +315,30 @@ function drawDetections(data) {
         ctx.fillStyle = 'rgba(34, 197, 94, 0.15)';
         ctx.fillRect(x, y, width, height);
         
-        // Draw thick rectangle border
+        // Keep the border and label compact at any camera resolution.
         ctx.strokeStyle = '#22c55e';
-        ctx.lineWidth = 6;
+        ctx.lineWidth = 2 / scale;
         ctx.strokeRect(x, y, width, height);
         
-        // Draw label background
         const label = `Goat #${i + 1} ${(confidence * 100).toFixed(0)}%`;
-        ctx.font = 'bold 20px Arial';
-        const textMetrics = ctx.measureText(label);
-        const textHeight = 24;
-        const padding = 8;
+        const fontSize = 12 / scale;
+        const padding = 4 / scale;
+        ctx.font = `600 ${fontSize}px Arial`;
+        const labelHeight = fontSize + padding * 2;
+        const labelY = Math.max(0, y - labelHeight);
         
         ctx.fillStyle = '#22c55e';
-        ctx.fillRect(x, y - textHeight - padding, textMetrics.width + padding * 2, textHeight + padding);
+        ctx.fillRect(x, labelY, ctx.measureText(label).width + padding * 2, labelHeight);
         
-        // Draw label text
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(label, x + padding, y - padding - 4);
-        
-        // Draw corner markers for better visibility
-        const markerSize = 20;
-        ctx.strokeStyle = '#ff0000';
-        ctx.lineWidth = 4;
-        
-        // Top-left corner
-        ctx.beginPath();
-        ctx.moveTo(x, y + markerSize);
-        ctx.lineTo(x, y);
-        ctx.lineTo(x + markerSize, y);
-        ctx.stroke();
-        
-        // Top-right corner
-        ctx.beginPath();
-        ctx.moveTo(x + width - markerSize, y);
-        ctx.lineTo(x + width, y);
-        ctx.lineTo(x + width, y + markerSize);
-        ctx.stroke();
-        
-        // Bottom-left corner
-        ctx.beginPath();
-        ctx.moveTo(x, y + height - markerSize);
-        ctx.lineTo(x, y + height);
-        ctx.lineTo(x + markerSize, y + height);
-        ctx.stroke();
-        
-        // Bottom-right corner
-        ctx.beginPath();
-        ctx.moveTo(x + width - markerSize, y + height);
-        ctx.lineTo(x + width, y + height);
-        ctx.lineTo(x + width, y + height - markerSize);
-        ctx.stroke();
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, x + padding, labelY + labelHeight / 2);
     });
 }
+
+window.addEventListener('resize', () => {
+    if (latestDetectionData) drawDetections(latestDetectionData);
+});
 
 function updateStats(data) {
     const count = data.detection_count || 0;

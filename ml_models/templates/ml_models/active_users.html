@@ -1,0 +1,105 @@
+{% extends 'base_modern.html' %}
+
+{% block title %}Active Users · GoHMoTech{% endblock %}
+{% block header_title %}Active Users{% endblock %}
+
+{% block content %}
+{% include 'monitoring_nav.html' %}
+
+<div class="page-header">
+    <div>
+        <div class="page-eyebrow">System activity</div>
+        <p class="page-subtitle mb-0">Farm accounts with a visible page and recent activity.</p>
+    </div>
+</div>
+
+<div class="page-section">
+    <div class="content-card">
+        <div class="card-header-custom d-flex justify-content-between align-items-center gap-2 flex-wrap">
+            <h5 class="mb-0"><i class="bi bi-people-fill"></i> Currently active: <span id="active-user-count" aria-live="polite">{{ active_count }}</span></h5>
+            <small id="active-users-updated" class="text-muted">Updating every 15 seconds</small>
+        </div>
+        <div class="card-body-custom">
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead><tr><th>Account</th><th>Role</th><th>Active pages</th><th>Last signal</th></tr></thead>
+                    <tbody id="active-users-rows">
+                        {% for user in users %}
+                        <tr>
+                            <td><strong>{{ user.name }}</strong><br><small class="text-muted">{{ user.username }}</small></td>
+                            <td>{{ user.role }}</td>
+                            <td>{{ user.pages }}</td>
+                            <td><time datetime="{{ user.last_signal }}">Just now</time></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-muted text-center py-4">No active farm accounts right now.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <p class="text-muted small mt-3 mb-0">An open page counts while its user has interacted within the last two minutes. Hidden, closed, and idle pages drop off within about 40 seconds. Scheduled and manually started detection can run without an active user.</p>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (() => {
+        const rows = document.getElementById('active-users-rows');
+        const count = document.getElementById('active-user-count');
+        const updated = document.getElementById('active-users-updated');
+
+        function cell(row, value) {
+            const element = document.createElement('td');
+            element.textContent = value;
+            row.appendChild(element);
+            return element;
+        }
+
+        async function refreshActiveUsers() {
+            if (document.hidden) return;
+            try {
+                const response = await fetch('{% url "ml_models:active_users" %}?format=json', {credentials: 'same-origin'});
+                if (!response.ok) throw new Error(`Active users request failed (${response.status})`);
+                const state = await response.json();
+                rows.replaceChildren();
+                count.textContent = state.count;
+                for (const user of state.users) {
+                    const row = document.createElement('tr');
+                    const account = document.createElement('td');
+                    const name = document.createElement('strong');
+                    name.textContent = user.name;
+                    const username = document.createElement('small');
+                    username.className = 'text-muted d-block';
+                    username.textContent = user.username;
+                    account.append(name, username);
+                    row.appendChild(account);
+                    cell(row, user.role);
+                    cell(row, user.pages);
+                    const lastSignal = new Date(user.last_signal);
+                    cell(row, Number.isNaN(lastSignal.getTime()) ? 'Unknown' : lastSignal.toLocaleTimeString());
+                    rows.appendChild(row);
+                }
+                if (!state.users.length) {
+                    const row = document.createElement('tr');
+                    const empty = cell(row, 'No active farm accounts right now.');
+                    empty.colSpan = 4;
+                    empty.className = 'text-muted text-center py-4';
+                    rows.appendChild(row);
+                }
+                updated.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+            } catch (error) {
+                updated.textContent = 'Could not update active users';
+                console.error('Active users:', error);
+            }
+        }
+
+        setTimeout(refreshActiveUsers, 1000);
+        setInterval(refreshActiveUsers, 15000);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) refreshActiveUsers();
+        });
+    })();
+</script>
+{% endblock %}

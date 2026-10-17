@@ -358,6 +358,7 @@
 {% endblock %}
 
 {% block content %}
+{% include 'monitoring_nav.html' %}
 <div class="tracking-page{% if focus_goat_id %} focus-mode{% endif %}"
      data-api-url="{% url 'iot:ble_tracking_snapshot' %}"
      data-focus-goat-id="{{ focus_goat_id|default:'' }}">

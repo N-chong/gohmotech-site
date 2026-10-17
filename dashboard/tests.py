@@ -7,7 +7,7 @@ from django.core import mail
 from django.contrib.staticfiles import finders
 from django.test import TestCase, override_settings
 
-from marketplace.auth import FARM_OWNER_GROUP_NAME
+from marketplace.auth import FARM_OWNER_GROUP_NAME, FARM_OPERATOR_GROUP_NAME
 
 
 class RootLandingTests(TestCase):
@@ -63,6 +63,74 @@ class RootLandingTests(TestCase):
             "/iot/owner/",
             fetch_redirect_response=False,
         )
+
+
+@override_settings(ACCOUNT_EMAIL_VERIFICATION="none")
+class RoleDefaultNavigationTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.admin = User.objects.create_user("nav-admin", password="test-pass", is_staff=True)
+        self.owner = User.objects.create_user("nav-owner", password="test-pass")
+        self.operator = User.objects.create_user("nav-operator", password="test-pass")
+        self.buyer = User.objects.create_user("nav-buyer", password="test-pass")
+        owner_group, _ = Group.objects.get_or_create(name=FARM_OWNER_GROUP_NAME)
+        operator_group, _ = Group.objects.get_or_create(name=FARM_OPERATOR_GROUP_NAME)
+        self.owner.groups.add(owner_group)
+        self.operator.groups.add(operator_group)
+
+    def test_login_goes_directly_to_role_default(self):
+        for user, destination in (
+            (self.admin, "/iot/"),
+            (self.owner, "/iot/owner/"),
+            (self.operator, "/iot/owner/"),
+            (self.buyer, "/marketplace/"),
+        ):
+            with self.subTest(role=user.username):
+                self.client.logout()
+                response = self.client.post(
+                    "/accounts/login/", {"login": user.username, "password": "test-pass"}
+                )
+                self.assertRedirects(response, destination, fetch_redirect_response=False)
+
+    def test_authenticated_login_page_and_root_use_role_default(self):
+        for user, destination in (
+            (self.admin, "/iot/"),
+            (self.owner, "/iot/owner/"),
+            (self.buyer, "/marketplace/"),
+        ):
+            with self.subTest(role=user.username):
+                self.client.force_login(user)
+                self.assertRedirects(self.client.get("/"), destination, fetch_redirect_response=False)
+                self.assertRedirects(
+                    self.client.get("/accounts/login/"), destination,
+                    fetch_redirect_response=False,
+                )
+
+    def test_explicit_next_and_direct_marketplace_visit_are_preserved(self):
+        response = self.client.post(
+            "/accounts/login/?next=/marketplace/goats/",
+            {"login": self.admin.username, "password": "test-pass", "next": "/marketplace/goats/"},
+        )
+        self.assertRedirects(response, "/marketplace/goats/", fetch_redirect_response=False)
+        self.assertEqual(self.client.get("/marketplace/").status_code, 200)
+        self.assertEqual(self.client.get("/marketplace/goats/").status_code, 200)
+
+    def test_pwa_launch_uses_role_default_without_redirecting_regular_marketplace_visits(self):
+        for user, destination in (
+            (self.admin, "/iot/"),
+            (self.owner, "/iot/owner/"),
+            (self.operator, "/iot/owner/"),
+        ):
+            with self.subTest(role=user.username):
+                self.client.force_login(user)
+                self.assertRedirects(
+                    self.client.get("/marketplace/?source=pwa"), destination,
+                    fetch_redirect_response=False,
+                )
+                self.assertEqual(self.client.get("/marketplace/").status_code, 200)
+
+        self.client.force_login(self.buyer)
+        self.assertEqual(self.client.get("/marketplace/?source=pwa").status_code, 200)
 
 
 class PwaSecurityTests(TestCase):

@@ -1,0 +1,15 @@
+<li class="sidebar-nav-item nav-group-item">
+    <details class="sidebar-nav-group" data-nav-prefix="/iot/monitoring/,/iot/cameras/,/iot/detections/,/ml/detection/,/ml/active-users/,/iot/tracking/,/security/">
+        <summary class="sidebar-nav-link"><i class="bi bi-eye-fill"></i><span>Monitoring</span><i class="bi bi-chevron-down nav-chevron"></i></summary>
+        <div class="sidebar-subnav">
+            <a href="{% url 'iot:monitoring_dashboard' %}" class="sidebar-nav-link"><i class="bi bi-speedometer2"></i><span>Farm Overview</span></a>
+            {% if can_manage_farm %}<a href="{% url 'iot:cameras_list' %}" class="sidebar-nav-link"><i class="bi bi-camera-video-fill"></i><span>Cameras</span></a>{% endif %}
+            <a href="{% url 'ml_models:detection_feed' %}" class="sidebar-nav-link"><i class="bi bi-bounding-box-circles"></i><span>Live Detection</span></a>
+            {% if is_system_admin %}<a href="{% url 'ml_models:active_users' %}" class="sidebar-nav-link"><i class="bi bi-people-fill"></i><span>Active Users</span></a>{% endif %}
+            <a href="{% url 'ml_models:detection_history' %}" class="sidebar-nav-link"><i class="bi bi-clock-history"></i><span>Camera Detections</span></a>
+            <a href="{% url 'iot:detection_history' %}" class="sidebar-nav-link"><i class="bi bi-person-badge"></i><span>Goat Recognition</span></a>
+            <a href="{% url 'iot:ble_tracking_dashboard' %}" class="sidebar-nav-link"><i class="bi bi-broadcast-pin"></i><span>Goat Tracking</span></a>
+            {% if can_manage_farm %}<a href="{% url 'security:dashboard' %}" class="sidebar-nav-link"><i class="bi bi-shield-check"></i><span>Security &amp; Alerts</span></a>{% endif %}
+        </div>
+    </details>
+</li>

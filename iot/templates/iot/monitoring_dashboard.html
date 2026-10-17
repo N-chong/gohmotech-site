@@ -27,6 +27,7 @@
 
 {% block content %}
 <div class="monitoring-page">
+    {% include 'monitoring_nav.html' %}
     <header class="monitor-hero">
         <div><div class="monitor-kicker">Current farm conditions</div><h1>Farm Monitoring</h1><p>See what needs attention, check goat-house conditions, and confirm which farm systems are reporting.</p></div>
         <div class="hero-actions"><span class="status-pill {{ farm_status }}">{{ farm_status_label }}</span><span class="updated">Page updated {{ dashboard_updated_at|date:"M j, Y · g:i:s A" }}</span><button class="refresh-button" type="button" data-monitor-refresh><i class="bi bi-arrow-clockwise"></i> Refresh readings</button></div>
@@ -61,6 +62,7 @@
         <section class="monitor-card" aria-labelledby="barn-heading"><div class="card-head"><div><h2 id="barn-heading">Barn and herd activity</h2><p>Camera availability and the latest computer-vision count.</p></div><a class="text-link" href="{% url 'ml_models:detection_feed' %}">Open live detection <i class="bi bi-arrow-right"></i></a></div><div class="card-content">
             <div class="camera-frame">{% if camera and camera_online %}<img src="{% url 'iot:camera_snapshot' camera.id %}" alt="Current snapshot from {{ camera.name }}" loading="lazy"><span class="camera-badge">Camera online</span>{% else %}<div class="camera-placeholder"><i class="bi bi-camera-video-off"></i><strong>{% if camera %}Camera is not currently available{% else %}No camera configured{% endif %}</strong><small>Open live detection for connection details.</small></div>{% endif %}</div>
             <div class="camera-meta"><div><span>Camera</span><strong>{{ camera.name|default:"Not configured" }}</strong></div><div><span>Latest frame count</span><strong>{{ latest_goat_count|default_if_none:"No detection" }}</strong></div><div><span>Registered herd</span><strong>{{ total_goats }} goat{{ total_goats|pluralize }}</strong></div></div>
+            {% if can_manage_farm %}<a class="text-link mt-3 d-inline-block" href="{% url 'iot:cameras_list' %}">View all cameras <i class="bi bi-arrow-right"></i></a>{% endif %}
         </div></section>
         <section class="monitor-card" aria-labelledby="equipment-heading"><div class="card-head"><div><h2 id="equipment-heading">Equipment status</h2><p>Read-only status. Controls remain on the Operate page.</p></div><a class="text-link" href="{% url 'iot:devices_list' %}">All devices <i class="bi bi-arrow-right"></i></a></div><div class="card-content equipment-list">
             <div class="equipment-row"><i class="bi bi-cpu-fill"></i><div><strong>Environment controller</strong><small>{% if environment_last_seen %}Last report {{ environment_last_seen|timesince }} ago{% else %}No report received{% endif %}</small></div><span class="equipment-state {% if environment_online %}online{% else %}offline{% endif %}">{% if environment_online %}Reporting{% else %}Offline{% endif %}</span></div>

@@ -26,6 +26,10 @@ app.autodiscover_tasks()
 
 # Periodic task schedule (Celery Beat)
 app.conf.beat_schedule = {
+    'ensure-live-detection': {
+        'task': 'ml_models.tasks.ensure_live_detection',
+        'schedule': 15.0,
+    },
     # Check time-based schedules every minute
     'check-automation-schedules': {
         'task': 'iot.tasks.check_and_execute_schedules',
@@ -117,4 +121,7 @@ app.conf.update(
     enable_utc=False,  # Use local time
     task_track_started=True,
     task_time_limit=30 * 60,  # 30 minutes
+    # RF-DETR leaves native allocator pages resident after its session. Recycle
+    # that worker child once the task has ended, not while inference is active.
+    worker_max_memory_per_child=1_000_000,  # KiB (about 1 GiB)
 )

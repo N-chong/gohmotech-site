@@ -8,6 +8,16 @@ ROLE_FARM_OPERATOR = "farm_operator"
 ROLE_MARKETPLACE = "marketplace"
 
 
+def default_page_name(user):
+    """Return the existing home route for an account's trusted system role."""
+    role = get_system_role(user)
+    if role == ROLE_ADMIN:
+        return "iot:dashboard"
+    if role in {ROLE_FARM_OWNER, ROLE_FARM_OPERATOR}:
+        return "iot:owner_dashboard"
+    return "marketplace:landing"
+
+
 def get_system_role(user):
     """Return the account's highest trusted GoHMotech role."""
     if not getattr(user, "is_authenticated", False):

@@ -59,6 +59,16 @@ class IPCameraAdminForm(forms.ModelForm):
         model = IPCamera
         fields = '__all__'
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name in ('username', 'password', 'rtsp_url', 'http_url', 'snapshot_url'):
+            if self.instance.pk and getattr(self.instance, name):
+                self.fields[name].help_text = (
+                    'Saved (hidden). Leave blank to keep it, or enter a new value to replace it.'
+                )
+            else:
+                self.fields[name].help_text = 'No value saved.'
+
     def _preserved_value(self, field_name):
         value = self.cleaned_data.get(field_name)
         if value or not self.instance.pk:

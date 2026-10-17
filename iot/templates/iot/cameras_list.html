@@ -1,13 +1,16 @@
 {% extends 'base_modern.html' %}
 
 {% block title %}IP Cameras - GoHMoTech{% endblock %}
+{% block header_title %}Cameras{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
-    <div class="row mb-4">
-        <div class="col-12">
-            <h2><i class="bi bi-camera-video-fill text-info"></i> IP Cameras</h2>
-            <p class="text-muted">Manage and monitor all IP cameras on the farm</p>
+    {% include 'monitoring_nav.html' %}
+    <div class="page-header">
+        <div>
+            <div class="page-eyebrow">Monitoring</div>
+            <h1>Cameras</h1>
+            <p class="page-subtitle">Choose a camera to view its live feed and detection controls.</p>
         </div>
     </div>
 
@@ -24,7 +27,7 @@
         <div class="col-md-3">
             <div class="card border-0 shadow-sm">
                 <div class="card-body">
-                    <h6 class="text-muted mb-2">Active</h6>
+                    <h6 class="text-muted mb-2">Enabled</h6>
                     <h3 class="mb-0 text-success">{{ active_cameras }}</h3>
                 </div>
             </div>
@@ -32,7 +35,7 @@
         <div class="col-md-3">
             <div class="card border-0 shadow-sm">
                 <div class="card-body">
-                    <h6 class="text-muted mb-2">Online</h6>
+                    <h6 class="text-muted mb-2">Reporting online</h6>
                     <h3 class="mb-0 text-primary">{{ online_cameras }}</h3>
                 </div>
             </div>
@@ -40,7 +43,7 @@
         <div class="col-md-3">
             <div class="card border-0 shadow-sm">
                 <div class="card-body">
-                    <h6 class="text-muted mb-2">Inactive</h6>
+                    <h6 class="text-muted mb-2">Disabled</h6>
                     <h3 class="mb-0 text-warning">{{ inactive_cameras }}</h3>
                 </div>
             </div>
@@ -52,7 +55,7 @@
         {% for camera in cameras %}
         <div class="col-lg-6 col-xl-4">
             <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <div class="card-header d-flex justify-content-between align-items-center gap-2">
                     <span>
                         <i class="bi bi-camera-fill"></i> 
                         <strong>{{ camera.name }}</strong>
@@ -62,11 +65,11 @@
                     </span>
                 </div>
                 <div class="card-body p-0">
-                    <div style="position: relative; background: #000; min-height: 250px;">
+                    <div style="position: relative; background: #000; min-height: 220px; aspect-ratio: 16 / 9;">
                         {% if camera.is_active %}
                             <img src="{% url 'iot:camera_feed' camera.id %}"
                                  alt="{{ camera.name }}"
-                                 style="width: 100%; height: auto; display: block;"
+                                 style="width: 100%; height: 100%; object-fit: contain; display: block;"
                                  onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                             <div style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #1a1a1a; color: white; align-items: center; justify-content: center; flex-direction: column;">
                                 <i class="bi bi-camera-video-off-fill" style="font-size: 3rem;"></i>
@@ -81,8 +84,8 @@
                     </div>
                 </div>
                 <div class="card-footer bg-light">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <small class="text-muted">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                        <small class="text-muted text-break">
                             <i class="bi bi-geo-alt-fill"></i> {{ camera.location }}
                         </small>
                         <small class="text-muted">
@@ -91,8 +94,8 @@
                     </div>
                     <div class="d-flex justify-content-between">
                         <span class="badge bg-secondary">{{ camera.get_camera_type_display }}</span>
-                        <a href="{% url 'iot:camera_detail' camera.id %}" class="btn btn-sm btn-primary">
-                            <i class="bi bi-arrows-fullscreen"></i> View
+                        <a href="{% url 'iot:camera_detail' camera.id %}" class="btn btn-sm btn-primary" aria-label="View {{ camera.name }} live feed">
+                            <i class="bi bi-arrows-fullscreen"></i> View camera
                         </a>
                     </div>
                 </div>

@@ -1336,7 +1336,7 @@ def camera_connect(request):
     
     # A saved endpoint change must replace any in-process stream holding the old URL.
     camera_manager.stop_stream(camera.id)
-    stream = camera_manager.get_stream(camera.id)
+    stream = camera_manager.get_stream(camera.id, persistent=True)
     
     if stream:
         return JsonResponse({
@@ -1372,7 +1372,7 @@ def start_camera(request, camera_id):
             'message': 'Camera is not active'
         }, status=400)
     
-    stream = camera_manager.get_stream(camera_id)
+    stream = camera_manager.get_stream(camera_id, persistent=True)
     
     if stream:
         return JsonResponse({

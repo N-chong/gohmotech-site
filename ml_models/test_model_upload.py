@@ -26,6 +26,15 @@ class ModelUploadFlowTests(TestCase):
         self.assertContains(response, "upload-chunk/")
         self.assertContains(response, "Remaining")
 
+    def test_live_detection_page_renders_csrf_token_and_box_overlay(self):
+        response = self.client.get(reverse("ml_models:detection_feed"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="detection-overlay"')
+        self.assertContains(response, 'id="detection-csrf-token"')
+        self.assertContains(response, "drawDetectionBoxes(data.detections || [])")
+        self.assertContains(response, "ctx.strokeRect(x, y, width, height)")
+
     def test_security_dashboard_uses_chunked_upload_progress(self):
         response = self.client.get(reverse("security:dashboard"))
 

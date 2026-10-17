@@ -216,6 +216,7 @@ PRIVATE_INQUIRY_ROOT = BASE_DIR / 'private_inquiry_uploads'
 # Authentication Configuration
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'
+ACCOUNT_ADAPTER = 'marketplace.adapters.GoHMoTechAccountAdapter'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 
 AUTHENTICATION_BACKENDS = [

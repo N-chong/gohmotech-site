@@ -14,7 +14,9 @@ from .validators import validate_model_upload
 class _Predictions:
     xyxy = np.array([[10.0, 20.0, 70.0, 100.0]])
     confidence = np.array([0.91])
-    class_id = np.array([0])
+    # Some RF-DETR checkpoints expose the sole foreground class as 1 rather
+    # than 0; the detector must normalize both conventions.
+    class_id = np.array([1])
 
 
 class _FakeRFDETRModel:

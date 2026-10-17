@@ -58,6 +58,7 @@
 {% endblock %}
 
 {% block content %}
+{% include 'monitoring_nav.html' %}
 <div class="page-content" data-detection-types='{% for k,v in detection_type_choices %}{{ k }}={{ v }};{% endfor %}'>
 
     <!-- Overview summary cards -->

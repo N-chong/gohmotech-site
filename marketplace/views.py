@@ -21,7 +21,7 @@ from iot.models import Goat, GoatImage
 
 from .auth import (
     BUYER_GROUP_NAME, FARM_OPERATOR_GROUP_NAME, FARM_OWNER_GROUP_NAME,
-    is_approved_seller, seller_profile_for,
+    default_page_name, is_approved_seller, seller_profile_for,
 )
 from .decorators import approved_seller_required, seller_applicant_required, staff_required
 from .forms import (
@@ -260,6 +260,12 @@ def _mark_saved_listings(user, listings):
 
 
 def marketplace_landing(request):
+    # Installed PWA launches here; route that launch like the site root.
+    # Ordinary marketplace URLs remain directly accessible to farm accounts.
+    if request.GET.get("source") == "pwa":
+        home = default_page_name(request.user)
+        if home != "marketplace:landing":
+            return redirect(home)
     expire_due_reservations()
     featured = _public_listing_queryset().filter(
         status=MarketplaceListing.AVAILABLE,

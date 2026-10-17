@@ -173,20 +173,11 @@
                 </a>
             </li>
             {% if is_system_admin %}
-            <li class="sidebar-nav-item">
-                <a href="/iot/monitoring/" class="sidebar-nav-link">
-                    <i class="bi bi-camera-video"></i> <span>Monitor</span>
-                </a>
-            </li>
+            {% include 'monitoring_sidebar.html' %}
             {% if can_manage_farm %}
             <li class="sidebar-nav-item">
                 <a href="/iot/automation/" class="sidebar-nav-link">
                     <i class="bi bi-robot"></i> <span>Operate</span>
-                </a>
-            </li>
-            <li class="sidebar-nav-item">
-                <a href="/security/" class="sidebar-nav-link">
-                    <i class="bi bi-shield-fill"></i> <span>Security</span>
                 </a>
             </li>
             <li class="sidebar-nav-item">
@@ -200,11 +191,6 @@
             <li class="sidebar-nav-item">
                 <a href="/iot/inventory/" class="sidebar-nav-link">
                     <i class="bi bi-grid-3x3-gap-fill"></i> <span>Goat Inventory</span>
-                </a>
-            </li>
-            <li class="sidebar-nav-item">
-                <a href="/iot/tracking/" class="sidebar-nav-link">
-                    <i class="bi bi-broadcast-pin"></i> <span>Goat Tracking</span>
                 </a>
             </li>
             <li class="sidebar-nav-item">
@@ -258,11 +244,6 @@
                     <i class="bi bi-fingerprint"></i> <span>Test Recognition</span>
                 </a>
             </li> -->
-            <li class="sidebar-nav-item">
-                <a href="/ml/detection/" class="sidebar-nav-link">
-                    <i class="bi bi-camera-video-fill"></i> <span>Live Detection</span>
-                </a>
-            </li>
             
             <li class="sidebar-nav-title">System</li>
             {% if not is_system_admin %}
@@ -309,24 +290,13 @@
                     </div>
                 </details>
             </li>
-            <li class="sidebar-nav-item nav-group-item">
-                <details class="sidebar-nav-group" data-nav-prefix="/iot/monitoring/,/iot/cameras/,/ml/detection/,/iot/tracking/,/security/">
-                    <summary class="sidebar-nav-link"><i class="bi bi-eye-fill"></i><span>Monitoring</span><i class="bi bi-chevron-down nav-chevron"></i></summary>
-                    <div class="sidebar-subnav">
-                        <a href="{% url 'iot:monitoring_dashboard' %}" class="sidebar-nav-link"><i class="bi bi-camera-video"></i><span>Farm Monitoring</span></a>
-                        <a href="{% url 'ml_models:detection_feed' %}" class="sidebar-nav-link"><i class="bi bi-bounding-box-circles"></i><span>Live Detection</span></a>
-                        <a href="{% url 'iot:ble_tracking_dashboard' %}" class="sidebar-nav-link"><i class="bi bi-broadcast-pin"></i><span>Goat Tracking</span></a>
-                        {% if can_manage_farm %}<a href="{% url 'security:dashboard' %}" class="sidebar-nav-link"><i class="bi bi-shield-check"></i><span>Security &amp; Alerts</span></a>{% endif %}
-                    </div>
-                </details>
-            </li>
+            {% include 'monitoring_sidebar.html' %}
             {% if can_manage_farm %}
             <li class="sidebar-nav-item nav-group-item">
-                <details class="sidebar-nav-group" data-nav-prefix="/analytics/,/iot/detections/,/iot/alerts/">
+                <details class="sidebar-nav-group" data-nav-prefix="/analytics/,/iot/alerts/">
                     <summary class="sidebar-nav-link"><i class="bi bi-journal-text"></i><span>Records</span><i class="bi bi-chevron-down nav-chevron"></i></summary>
                     <div class="sidebar-subnav">
                         <a href="{% url 'analytics:dashboard' %}" class="sidebar-nav-link"><i class="bi bi-file-earmark-bar-graph-fill"></i><span>Reports</span></a>
-                        <a href="{% url 'iot:detection_history' %}" class="sidebar-nav-link"><i class="bi bi-clock-history"></i><span>Detection History</span></a>
                     </div>
                 </details>
             </li>
@@ -364,10 +334,10 @@
         <a href="{% if is_system_admin %}{% url 'iot:dashboard' %}{% else %}{% url 'iot:owner_dashboard' %}{% endif %}" data-mobile-path="/iot/owner/,/iot/">
             <i class="bi bi-grid-fill"></i><span>Overview</span>
         </a>
-        <a href="{% url 'iot:monitoring_dashboard' %}" data-mobile-path="/iot/monitoring/,/iot/cameras/,/ml/detection/">
+        <a href="{% url 'iot:monitoring_dashboard' %}" data-mobile-path="/iot/monitoring/,/iot/cameras/,/iot/detections/,/iot/tracking/,/ml/detection/,/ml/active-users/,/security/">
             <i class="bi bi-camera-video-fill"></i><span>Monitor</span>
         </a>
-        <a href="{% url 'iot:goat_inventory' %}" data-mobile-path="/iot/inventory/,/iot/tracking/">
+        <a href="{% url 'iot:goat_inventory' %}" data-mobile-path="/iot/inventory/">
             <i class="bi bi-heart-pulse-fill"></i><span>Herd</span>
         </a>
         <a href="{% if can_manage_farm %}{% url 'iot:automation_control' %}{% else %}{% url 'iot:devices_list' %}{% endif %}" data-mobile-path="/iot/automation/,/iot/devices/,/feeding/">
@@ -545,6 +515,116 @@
         }
     </script>
     
+    <script>
+        // Viewer IDs also work when the Pi is opened over plain HTTP, where
+        // crypto.randomUUID() is unavailable in some browsers.
+        window.gohmoNewViewerToken = function() {
+            if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+            const bytes = new Uint8Array(16);
+            if (window.crypto && window.crypto.getRandomValues) {
+                window.crypto.getRandomValues(bytes);
+            } else {
+                for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+            }
+            bytes[6] = (bytes[6] & 15) | 64;
+            bytes[8] = (bytes[8] & 63) | 128;
+            const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+            return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+        };
+    </script>
+    {% if has_farm_access %}
+    <script>
+        // A visible page counts as a viewer only while its user is active.
+        // The Redis lease also expires if a browser disconnects unexpectedly.
+        (() => {
+            const token = window.gohmoNewViewerToken();
+            const csrf = document.querySelector('input[name="csrfmiddlewaretoken"]')?.value ||
+                document.cookie.split('; ').find(cookie => cookie.startsWith('gohmotech_csrf='))?.split('=')[1] ||
+                document.cookie.split('; ').find(cookie => cookie.startsWith('csrftoken='))?.split('=')[1];
+            let timer = null;
+            let paused = false;
+            const idleAfterMs = 2 * 60 * 1000;
+            let lastActivity = Date.now();
+            function sendPresence(action) {
+                fetch('/ml/api/user-presence/', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf},
+                    body: JSON.stringify({action, token}), keepalive: action === 'leave'
+                }).then(response => {
+                    if (!response.ok) throw new Error(`User presence failed (${response.status})`);
+                }).catch(error => console.error('User presence:', error));
+            }
+            function sendDetection(action) {
+                fetch('/ml/api/live-detection/', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf},
+                    body: JSON.stringify({action, token}), keepalive: action === 'leave'
+                }).then(response => {
+                    if (!response.ok) throw new Error(`Detection presence failed (${response.status})`);
+                    return response.json();
+                }).then(state => {
+                    window.gohmoDetectionPresence.status = state;
+                    window.dispatchEvent(new CustomEvent('gohmo:detection-status', {detail: state}));
+                }).catch(error => console.error('Detection presence:', error));
+            }
+            function refreshStatus() {
+                fetch('/ml/api/live-detection/', {credentials: 'same-origin'})
+                    .then(response => {
+                        if (!response.ok) throw new Error(`Detection status failed (${response.status})`);
+                        return response.json();
+                    }).then(state => {
+                        window.gohmoDetectionPresence.status = state;
+                        window.dispatchEvent(new CustomEvent('gohmo:detection-status', {detail: state}));
+                    }).catch(error => console.error('Detection status:', error));
+            }
+            function start() {
+                if (document.hidden || timer || Date.now() - lastActivity >= idleAfterMs) return;
+                sendPresence('view');
+                if (!paused) sendDetection('view');
+                timer = setInterval(() => {
+                    if (Date.now() - lastActivity >= idleAfterMs) stop();
+                    else {
+                        sendPresence('view');
+                        if (!paused) sendDetection('view');
+                    }
+                }, 15000);
+            }
+            function stop() {
+                if (!timer) return;
+                clearInterval(timer);
+                timer = null;
+                sendPresence('leave');
+                sendDetection('leave');
+            }
+            function pause() {
+                if (!paused && timer) sendDetection('leave');
+                paused = true;
+            }
+            function resume() {
+                paused = false;
+                if (timer) sendDetection('view');
+                else start();
+            }
+            function markActivity(event) {
+                if (event && !event.isTrusted) return;
+                lastActivity = Date.now();
+                start();
+            }
+            window.gohmoDetectionPresence = {token, start, stop, pause, resume};
+            start();
+            setInterval(() => {
+                if (!document.hidden && !timer) refreshStatus();
+            }, 15000);
+            for (const eventName of ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart']) {
+                document.addEventListener(eventName, markActivity, {passive: true});
+            }
+            document.addEventListener('visibilitychange', () => document.hidden ? stop() : markActivity());
+            window.addEventListener('focus', markActivity);
+            window.addEventListener('pagehide', stop);
+            window.addEventListener('pageshow', markActivity);
+        })();
+    </script>
+    {% endif %}
     {% block extra_js %}{% endblock %}
     <script src="{% static 'js/pwa-register.js' %}?v=2" defer></script>
 {% include "onboarding/widget.html" %}

@@ -55,6 +55,19 @@ class FakeCapture:
 
 
 class CameraStreamTests(SimpleTestCase):
+    def test_idle_unpinned_stream_releases_capture(self):
+        stream = CameraStream(FakeCamera())
+        capture = FakeCapture()
+        stream.capture = capture
+        stream.is_running = True
+        stream.last_consumer_at = time.monotonic() - stream.idle_timeout - 1
+
+        stream._update_frame()
+
+        self.assertFalse(stream.is_running)
+        self.assertTrue(stream.stop_event.is_set())
+        self.assertTrue(capture.released)
+
     def test_configured_stream_url_follows_mac_resolved_dhcp_address(self):
         camera = IPCamera(
             camera_id="CAM-1",
@@ -360,3 +373,6 @@ class CameraStreamTests(SimpleTestCase):
         self.assertNotIn("operator", rendered_secrets)
         self.assertNotIn("top-secret", rendered_secrets)
         self.assertNotIn("rtsp://", rendered_secrets)
+        self.assertIn("Saved (hidden)", form.fields["password"].help_text)
+        self.assertIn("Saved (hidden)", form.fields["rtsp_url"].help_text)
+        self.assertEqual(form.fields["http_url"].help_text, "No value saved.")

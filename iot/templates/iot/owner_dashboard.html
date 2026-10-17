@@ -362,6 +362,7 @@
             <p>{% if is_farm_operator %}Monitor the goat house, livestock, cameras, and recent detections from one place.{% else %}Your current farm status, livestock activity, environment, and equipment at a glance.{% endif %}</p>
             <div class="owner-status-row">
                 <span class="owner-status-pill"><i class="bi bi-camera-video-fill"></i> {{ cameras_online }}/{{ cameras_total }} cameras online</span>
+                {% if can_manage_farm %}<span class="owner-status-pill"><i class="bi bi-cpu-fill"></i> Detection: <strong id="owner-detection-mode">Starting…</strong></span>{% endif %}
                 <span class="owner-status-pill"><i class="bi bi-cpu-fill"></i> {{ online_actuators }}/{{ total_actuators }} devices online</span>
                 <span class="owner-status-pill"><i class="bi bi-clock-fill"></i> Updated {{ last_sync_time|date:"g:i A" }}</span>
             </div>
@@ -591,6 +592,18 @@
 {% endblock %}
 
 {% block extra_js %}
+{% if can_manage_farm %}
+<script>
+    function showOwnerDetectionMode(state) {
+        const label = document.getElementById('owner-detection-mode');
+        if (label) label.textContent = state.mode +
+            (state.mode === 'Live Viewing' ? ` · ${state.viewers} active page${state.viewers === 1 ? '' : 's'}` : '') +
+            (state.mode !== 'Inactive' && !state.running ? ' · starting' : '');
+    }
+    window.addEventListener('gohmo:detection-status', event => showOwnerDetectionMode(event.detail));
+    if (window.gohmoDetectionPresence?.status) showOwnerDetectionMode(window.gohmoDetectionPresence.status);
+</script>
+{% endif %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="{% static 'js/goat_house_viewer.js' %}"></script>
 <script>

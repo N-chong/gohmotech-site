@@ -2,7 +2,7 @@
 {% load static %}
 
 {% block title %}{{ page_title }}{% endblock %}
-{% block header_title %}Detection History{% endblock %}
+{% block header_title %}Goat Recognition History{% endblock %}
 
 {% block extra_css %}
     .confidence-bar {
@@ -49,11 +49,12 @@
 {% endblock %}
 
 {% block content %}
+{% include 'monitoring_nav.html' %}
 <div class="page-header">
     <div>
         <div class="page-eyebrow">Monitoring</div>
-        <h1>Detection History</h1>
-        <p class="page-subtitle">AI-powered goat detections across all cameras</p>
+        <h1>Goat Recognition History</h1>
+        <p class="page-subtitle">Recognition records linked to individual goats.</p>
     </div>
     <div class="page-actions">
         <a href="{% url 'iot:goat_inventory' %}" class="btn btn-outline">

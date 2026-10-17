@@ -878,7 +878,7 @@
                         </small>
                     </div>
                     <div class="camera-body" style="position: relative; background: #000; aspect-ratio: 16 / 9;">
-                        <img data-live-camera data-camera-id="{{ camera.id }}" data-feed-url="{% url 'iot:camera_feed' camera.id %}?fps=10&quality=70&width=960"
+                        <img data-live-camera data-camera-id="{{ camera.id }}" data-feed-url="{% url 'iot:camera_feed' camera.id %}?fps=1&quality=40&width=320"
                              alt="{{ camera.name }}"
                              style="width: 100%; height: 100%; object-fit: contain; display: block;">
                         <div data-camera-state role="status" class="camera-offline" style="display: flex; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #1a1a1a; color: white; align-items: center; justify-content: center; flex-direction: column;">
@@ -900,6 +900,11 @@
                             </a>
                         </div>
                     </div>
+                    {% if can_manage_farm %}
+                    <div class="bg-light px-2 pb-2 small" aria-live="polite">
+                        Goat detection: <strong id="dashboard-detection-mode">Starting…</strong>
+                    </div>
+                    {% endif %}
                 </div>
                 <div class="mt-3 p-3 bg-light rounded">
                     <div class="row text-center">
@@ -930,6 +935,18 @@
 {% block extra_js %}
 <script defer src="{% static 'js/live-camera.js' %}?v=5"></script>
 <script defer src="{% static 'js/dashboard-runtime.js' %}?v=2"></script>
+{% if can_manage_farm and camera %}
+<script>
+    function showDashboardDetectionMode(state) {
+        const label = document.getElementById('dashboard-detection-mode');
+        if (label) label.textContent = state.mode +
+            (state.mode === 'Live Viewing' ? ` · ${state.viewers} active page${state.viewers === 1 ? '' : 's'}` : '') +
+            (state.mode !== 'Inactive' && !state.running ? ' · starting' : '');
+    }
+    window.addEventListener('gohmo:detection-status', event => showDashboardDetectionMode(event.detail));
+    if (window.gohmoDetectionPresence?.status) showDashboardDetectionMode(window.gohmoDetectionPresence.status);
+</script>
+{% endif %}
 <script>
     // Initialize tooltips
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))

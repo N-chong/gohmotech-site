@@ -5,9 +5,10 @@
 {% block header_title %}Live Detection{% endblock %}
 
 {% block extra_css %}
-<style>
     /* ---- Camera feed card ------------------------------------------------ */
     .det-feed-card {
+        min-width: 0;
+        width: 100%;
         background: var(--card-bg);
         border-radius: var(--radius-lg);
         overflow: hidden;
@@ -23,18 +24,46 @@
         display: flex;
         align-items: center;
         gap: .5rem;
+        min-width: 0;
+        overflow-wrap: anywhere;
     }
     .camera-feed-container {
         position: relative;
-        /* Intentional media letterbox backdrop — reads correctly in both themes */
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        min-width: 0;
+        overflow: hidden;
+        isolation: isolate;
         background: #000;
-        min-height: 460px;
+    }
+    .camera-feed {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+    }
+    .detection-overlay {
+        position: absolute;
+        pointer-events: none;
+        z-index: 8;
+    }
+    .camera-placeholder {
+        position: absolute;
+        inset: 0;
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
+        overflow: hidden;
+        color: #e2e8f0;
+        text-align: center;
+        padding: clamp(12px, 4vw, 30px);
     }
-    .camera-feed { width: 100%; height: auto; display: block; }
-    .camera-placeholder { color: var(--text-tertiary); text-align: center; padding: 60px 30px; }
+    .camera-placeholder h5,
+    .camera-placeholder p { max-width: 100%; overflow-wrap: anywhere; }
+    .camera-placeholder i { font-size: clamp(2rem, 9vw, 4.5rem) !important; }
 
     .camera-controls { background: var(--card-bg-subtle); padding: 15px; border-top: 1px solid var(--border-color); }
 
@@ -42,12 +71,21 @@
        Kept identical to the original so existing JS (className reassignment) works. */
     .status-badge {
         position: absolute;
-        top: 15px;
-        right: 15px;
+        top: 10px;
+        right: 10px;
         z-index: 10;
-        font-size: 13px;
-        padding: 6px 14px;
+        max-width: calc(100% - 20px);
+        margin: 0 !important;
+        padding: 6px 10px;
+        font-size: clamp(10px, 2.4vw, 13px);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
+    .camera-feed-container .status-badge.bg-success { background: var(--success) !important; }
+    .camera-feed-container .status-badge.bg-warning { background: var(--warning) !important; color: #1f2937; }
+    .camera-feed-container .status-badge.bg-danger { background: var(--danger) !important; }
+    .camera-feed-container .status-badge.bg-secondary { background: #334155 !important; }
 
     .config-section {
         background: var(--card-bg);
@@ -59,16 +97,27 @@
 
     .goat-count-badge {
         position: absolute;
-        bottom: 15px;
-        left: 15px;
+        bottom: 10px;
+        left: 10px;
+        z-index: 10;
+        max-width: calc(100% - 20px);
         background: var(--success);
         color: #fff;
-        padding: 8px 20px;
+        padding: 6px 11px;
         border-radius: var(--radius-full);
         font-weight: 600;
-        font-size: 15px;
+        font-size: clamp(11px, 2.6vw, 15px);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
         box-shadow: var(--shadow-md);
     }
+    .det-feed-section,
+    .det-feed-section .row > [class*="col-"] { min-width: 0; }
+    .det-feed-section .content-card,
+    .det-feed-section .config-section { max-width: 100%; overflow-wrap: anywhere; }
+    .event-row > div,
+    .model-line > div { min-width: 0; overflow-wrap: anywhere; }
 
     /* ---- Active-model + status side panel -------------------------------- */
     .model-line { display: flex; align-items: center; gap: .6rem; }
@@ -92,7 +141,7 @@
     .event-count { font-weight: 700; color: var(--text-primary); }
 
     /* Chips in the page-actions row */
-    .model-chip { display: inline-flex; align-items: center; gap: 7px; font-size: .82rem; font-weight: 600; padding: 5px 12px; border-radius: var(--radius-full); }
+    .model-chip { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; overflow-wrap: anywhere; font-size: .82rem; font-weight: 600; padding: 5px 12px; border-radius: var(--radius-full); }
     .model-chip.active   { background: var(--success-bg); color: var(--success); border: 1px solid var(--success-border); }
     .model-chip.inactive { background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning-border); }
 
@@ -105,18 +154,27 @@
     .det-note li { margin-bottom: .35rem; }
 
     @media (max-width: 768px) {
-        .camera-feed-container { min-height: 280px; }
-        .camera-controls .btn-group { width: 100%; }
-        .status-badge { position: static; display: inline-block; margin-bottom: 8px; }
-        .goat-count-badge { position: static; display: block; margin: 10px; text-align: center; }
+        .det-page-body { display: flex; flex-direction: column; }
+        .det-feed-section { order: 0; }
+        .det-page-body > .stat-grid { order: 1; margin-top: 16px; }
+        .det-feed-section { padding-inline: 0; }
+        .det-feed-section > .row { margin-inline: 0; }
+        .det-feed-section > .row > [class*="col-"] { padding-inline: 0; }
+        .camera-controls { padding: 12px; }
+        .camera-controls > .d-flex { align-items: stretch !important; }
+        .camera-controls > .d-flex > .btn { width: 100%; }
+        .camera-controls .btn-group { display: flex; width: 100%; max-width: 100%; }
+        .camera-controls .btn-group > .btn { min-width: 0; white-space: normal; }
+        .camera-controls .btn-group > .btn:first-child { flex: 1 1 auto; }
+        .config-section .btn-group { flex-wrap: wrap; gap: 8px; }
+        .config-section .btn-group > .btn { flex: 1 1 120px; }
     }
-    @media (max-width: 480px) {
-        .camera-feed-container { min-height: 220px; }
-    }
-</style>
 {% endblock %}
 
 {% block content %}
+    {% include 'monitoring_nav.html' %}
+
+    <div class="d-none" id="detection-csrf-token">{% csrf_token %}</div>
 
     <!-- Header: subtitle + real active-model status + history link -->
     <div class="page-header">
@@ -134,9 +192,6 @@
                     <i class="bi bi-exclamation-triangle"></i> No model loaded
                 </span>
             {% endif %}
-            <a href="{% url 'ml_models:detection_history' %}" class="btn btn-outline btn-sm">
-                <i class="bi bi-clock-history"></i> History
-            </a>
         </div>
     </div>
 
@@ -163,6 +218,7 @@
         </div>
     {% endif %}
 
+    <div class="det-page-body">
     <!-- Live stats (honest: derived from real detections) -->
     <div class="stat-grid mb-4">
         <div class="stat-card">
@@ -197,7 +253,7 @@
         </div>
     </div>
 
-    <div class="page-section">
+    <div class="page-section det-feed-section">
         <div class="row g-4">
             <!-- Camera feed (large, primary) -->
             <div class="col-lg-8">
@@ -212,10 +268,12 @@
                             <i class="bi bi-camera-video-off" style="font-size: 4.5rem;"></i>
                             <h5 class="mt-3">Camera not connected</h5>
                             <p class="text-tertiary mb-0">
-                                {% if camera %}Press "Start Detection" to connect.{% else %}Configure a camera to start monitoring.{% endif %}
+                                {% if camera %}Connecting automatically to the live camera.{% else %}Configure a camera to start monitoring.{% endif %}
                             </p>
                         </div>
                         <img class="camera-feed d-none" id="camera-main-feed" alt="Goat House Camera">
+                        <canvas class="detection-overlay d-none" id="detection-overlay"
+                                aria-label="Goat detection bounding boxes"></canvas>
                         <span class="goat-count-badge d-none" id="main-goat-count">0 goats detected</span>
                     </div>
                     {% if can_manage_farm %}<div class="camera-controls">
@@ -224,13 +282,14 @@
                                 <i class="bi bi-gear" id="settings-icon"></i> <span id="settings-text">Camera settings</span>
                             </button>{% endif %}
                             <div class="btn-group btn-group-sm">
-                                <button class="btn btn-success" id="start-camera-btn" onclick="connectCamera()">
+                                <button class="btn btn-success" id="start-camera-btn" onclick="startManualDetection()">
                                     <i class="bi bi-play-circle"></i> Start Detection
                                 </button>
                                 <button class="btn btn-danger" id="stop-camera-btn" onclick="stopCamera()">
                                     <i class="bi bi-stop-circle"></i> Stop
                                 </button>
                             </div>
+                            <span id="manual-detection-state" class="badge bg-secondary" role="status" aria-live="polite">Manual detection: Off</span>
                         </div>
 
                         {% if is_system_admin %}<div id="camera-settings" class="config-section d-none">
@@ -277,7 +336,7 @@
                                 <div class="col-md-4">
                                     <label class="form-label small fw-bold">Detection interval (sec)</label>
                                     <input type="number" class="form-control form-control-sm"
-                                           id="detection-interval" value="{% if camera %}{{ camera.detection_interval_seconds }}{% else %}2{% endif %}" min="1" max="10">
+                                           id="detection-interval" value="{% if camera %}{{ camera.detection_interval_seconds }}{% else %}2{% endif %}" min="2" max="60">
                                 </div>
                                 <div class="col-12">
                                     <div class="btn-group w-100">
@@ -290,21 +349,25 @@
                                     </div>
                                     <p class="text-tertiary small mb-0 mt-2">
                                         <i class="bi bi-info-circle"></i>
-                                        Saved settings are stored in this browser only. The live feed uses the camera registered in the database.
+                                        Camera preferences stay in this browser. Detection interval is saved for the local worker.
                                     </p>
                                 </div>
                             </div>
                         </div>{% endif %}
                     </div>{% else %}<div class="camera-controls"><span class="badge bg-secondary">Read-only live camera</span></div>{% endif %}
+                    <div class="small px-3 pb-2" aria-live="polite">
+                        Detection: <strong id="detection-mode">Inactive</strong>
+                        · Next scheduled session: <span id="next-detection-session">—</span>
+                    </div>
                 </div>
 
-                <!-- Honesty note about how detection actually runs -->
+                <!-- Detection schedule and local inference note -->
                 <details class="det-note mt-3">
                     <summary><i class="bi bi-info-circle"></i> How live detection works</summary>
                     <ul>
-                        <li>The video stream is served by the system's camera engine. Detection runs <strong>on demand from this page</strong>: while it is open and the camera is connected, frames are sent to the server model every few seconds.</li>
+                        <li>RF-DETR processes camera frames locally on the Raspberry Pi. Live viewing, manual start, and the hourly two-minute schedule share one inference worker.</li>
                         <li>Each detection is saved and appears in <strong>Recent detections</strong> and the history page.</li>
-                        <li><strong>Closing this page stops detection.</strong> Continuous background detection would require a server-side worker and is noted as a future step.</li>
+                        <li>Closing or leaving the page idle ends its viewing and manual detection session. Scheduled sessions run independently.</li>
                     </ul>
                 </details>
             </div>
@@ -364,12 +427,13 @@
         </div>
     </div>
 
+    </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
     let cameraConnected = false;
-    let detectionInterval = null;
+    let viewingStoppedByUser = false;
 
     {% if is_system_admin %}// Toggle camera settings panel
     function toggleSettings() {
@@ -392,9 +456,6 @@
     function connectCamera() {
         {% if camera %}
         // Use configured camera from database
-        const intervalInput = document.getElementById('detection-interval');
-        const interval = intervalInput ? (parseInt(intervalInput.value) || 2) : 2;
-
         const statusBadge = document.getElementById('status-badge');
         const cameraStatusText = document.getElementById('camera-status-text');
         const placeholder = document.getElementById('camera-placeholder');
@@ -405,8 +466,12 @@
         statusBadge.className = 'status-badge badge bg-warning';
         cameraStatusText.textContent = 'Connecting';
 
+        // Register viewing demand immediately; multipart image load events are
+        // browser-dependent and may arrive after the first inference window.
+        startLiveSession();
+
         // Set camera feed URL
-        feedImg.src = '{% url "iot:camera_feed" camera.id %}';
+        feedImg.src = '{% url "iot:camera_feed" camera.id %}?fps=2&quality=40&width=480';
 
         // Hide placeholder, show feed
         placeholder.classList.add('d-none');
@@ -414,6 +479,10 @@
 
         // Handle successful load
         feedImg.onload = function() {
+            const container = document.getElementById('camera-main-container');
+            if (feedImg.naturalWidth && feedImg.naturalHeight) {
+                container.style.aspectRatio = `${feedImg.naturalWidth} / ${feedImg.naturalHeight}`;
+            }
             // Update status
             statusBadge.textContent = 'Online';
             statusBadge.className = 'status-badge badge bg-success';
@@ -421,12 +490,12 @@
 
             cameraConnected = true;
 
-            // Start periodic detection
-            {% if can_manage_farm %}startDetection(interval);{% endif %}
+            startLiveSession();
         };
 
         // Handle load error
         feedImg.onerror = function() {
+            leaveLiveSession();
             statusBadge.textContent = 'Error';
             statusBadge.className = 'status-badge badge bg-danger';
             cameraStatusText.textContent = 'Connection Failed';
@@ -443,137 +512,206 @@
         {% endif %}
     }
 
-    // Start periodic goat detection with YOLOv8
-    function startDetection(interval) {
-        if (detectionInterval) {
-            clearInterval(detectionInterval);
-        }
+    // One local worker performs inference. Browsers send only a small viewer lease.
+    const detectionToken = window.gohmoDetectionPresence?.token || window.gohmoNewViewerToken();
+    let viewerTimer = null;
+    let sourceFrameWidth = 0;
+    let sourceFrameHeight = 0;
 
-        // Run YOLOv8 detection periodically
-        detectionInterval = setInterval(() => {
-            if (cameraConnected) {
-                runYOLOv8Detection();
-            }
-        }, interval * 1000);
-
-        // Run first detection immediately
-        if (cameraConnected) {
-            runYOLOv8Detection();
-        }
+    async function detectionControl(action, extra = {}) {
+        const response = await fetch('/ml/api/live-detection/', {
+            method: 'POST', credentials: 'same-origin',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('gohmotech_csrf') || getCookie('csrftoken')},
+            body: JSON.stringify({action, token: detectionToken, ...extra}), keepalive: action === 'leave'
+        });
+        if (!response.ok) throw new Error(`Detection control failed (${response.status})`);
+        return response.json();
     }
 
-    // Run YOLOv8 detection on current camera frame
-    function runYOLOv8Detection() {
-        const feedImg = document.getElementById('camera-main-feed');
+    function startLiveSession() {
+        if (window.gohmoDetectionPresence) {
+            window.gohmoDetectionPresence.resume();
+            return;
+        }
+        if (viewerTimer) return;
+        detectionControl('view').catch(console.error);
+        viewerTimer = setInterval(() => detectionControl('view').catch(console.error), 15000);
+    }
 
-        // Create canvas to capture current frame
-        const canvas = document.createElement('canvas');
-        canvas.width = feedImg.naturalWidth || 640;
-        canvas.height = feedImg.naturalHeight || 480;
-        const ctx = canvas.getContext('2d');
+    function leaveLiveSession() {
+        if (window.gohmoDetectionPresence) {
+            window.gohmoDetectionPresence.pause();
+            return;
+        }
+        if (viewerTimer) clearInterval(viewerTimer);
+        viewerTimer = null;
+        detectionControl('leave').catch(console.error);
+    }
 
-        // Draw current frame to canvas
-        ctx.drawImage(feedImg, 0, 0, canvas.width, canvas.height);
+    async function startManualDetection() {
+        try {
+            await detectionControl('manual_start');
+            viewingStoppedByUser = false;
+            if (!cameraConnected) connectCamera();
+            refreshDetectionStatus();
+        } catch (error) { console.error(error); }
+    }
 
-        // Convert canvas to blob
-        canvas.toBlob(function(blob) {
-            if (!blob) {
-                console.error('Failed to capture frame');
+    function clearLiveResults() {
+        latestDetectionBoxes = [];
+        const overlay = document.getElementById('detection-overlay');
+        if (overlay) {
+            overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height);
+            overlay.classList.add('d-none');
+        }
+        document.getElementById('main-goat-count').classList.add('d-none');
+        document.getElementById('total-goats').textContent = '0';
+        document.getElementById('total-persons').textContent = '0';
+        document.getElementById('avg-confidence').textContent = '0%';
+    }
+
+    async function refreshDetectionStatus() {
+        try {
+            const response = await fetch('/ml/api/live-detection/', {credentials: 'same-origin'});
+            if (!response.ok) return;
+            const state = await response.json();
+            const mode = document.getElementById('detection-mode');
+            const manualState = document.getElementById('manual-detection-state');
+            const next = document.getElementById('next-detection-session');
+            if (mode) mode.textContent = state.mode +
+                (state.mode === 'Live Viewing' ? ` · ${state.viewers} active page${state.viewers === 1 ? '' : 's'}` : '') +
+                (state.mode !== 'Inactive' && !state.running ? ' · starting' : '');
+            if (manualState) {
+                manualState.textContent = `Manual detection: ${state.manual_enabled ? 'On' : 'Off'}`;
+                manualState.classList.toggle('bg-success', state.manual_enabled);
+                manualState.classList.toggle('bg-secondary', !state.manual_enabled);
+            }
+            if (next) next.textContent = new Date(state.next_scheduled_at).toLocaleString([], {
+                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila'
+            });
+            const data = state.latest;
+            if (!data || !cameraConnected || Date.now() - Date.parse(data.timestamp) > 15000) {
+                clearLiveResults();
                 return;
             }
+            sourceFrameWidth = data.frame_width;
+            sourceFrameHeight = data.frame_height;
+            drawDetectionBoxes(data.detections || []);
+            const count = data.detection_count || 0;
+            document.getElementById('total-goats').textContent = count;
+            document.getElementById('avg-confidence').textContent = Math.round((data.confidence || 0) * 100) + '%';
+            document.getElementById('main-goat-count').textContent = `${count} goat${count !== 1 ? 's' : ''} detected`;
+            document.getElementById('main-goat-count').classList.remove('d-none');
+            document.getElementById('total-persons').textContent = (data.persons && data.persons.count) || 0;
+        } catch (error) { console.error('Detection status error:', error); }
+    }
+    setInterval(refreshDetectionStatus, 3000);
+    refreshDetectionStatus();
 
-            // Create FormData with the frame
-            const formData = new FormData();
-            formData.append('image', blob, 'frame.jpg');
-            {% if camera %}
-            formData.append('camera_id', '{{ camera.camera_id }}');
-            {% endif %}
+    let latestDetectionBoxes = [];
 
-            // Send to YOLOv8 detection API
-            fetch('/ml/api/detect/', {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': getCookie('csrftoken')
-                },
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    console.error('Detection error:', data.error);
-                    // Show error in UI
-                    document.getElementById('total-goats').textContent = 'Error';
-                    return;
-                }
+    function drawDetectionBoxes(detections) {
+        latestDetectionBoxes = detections;
+        const feedImg = document.getElementById('camera-main-feed');
+        const overlay = document.getElementById('detection-overlay');
+        const container = document.getElementById('camera-main-container');
+        if (!feedImg || !overlay || !container || !feedImg.naturalWidth || !feedImg.clientWidth) return;
 
-                // Update UI with real YOLOv8 results
-                const count = data.detection_count || 0;
-                const confidence = data.confidence ? Math.round(data.confidence * 100) : 0;
+        // The image element fills the responsive frame; object-fit may add
+        // letterboxing. Place the canvas over visible pixels only.
+        const frameWidth = container.clientWidth;
+        const frameHeight = container.clientHeight;
+        const scale = Math.min(frameWidth / feedImg.naturalWidth,
+                               frameHeight / feedImg.naturalHeight);
+        if (!scale) return;
+        const visibleWidth = feedImg.naturalWidth * scale;
+        const visibleHeight = feedImg.naturalHeight * scale;
+        overlay.width = feedImg.naturalWidth;
+        overlay.height = feedImg.naturalHeight;
+        overlay.style.left = `${(frameWidth - visibleWidth) / 2}px`;
+        overlay.style.top = `${(frameHeight - visibleHeight) / 2}px`;
+        overlay.style.width = `${visibleWidth}px`;
+        overlay.style.height = `${visibleHeight}px`;
+        overlay.classList.remove('d-none');
 
-                document.getElementById('total-goats').textContent = count;
-                document.getElementById('avg-confidence').textContent = confidence + '%';
-                document.getElementById('main-goat-count').textContent = `${count} goat${count !== 1 ? 's' : ''} detected`;
-                document.getElementById('main-goat-count').classList.remove('d-none');
+        const ctx = overlay.getContext('2d');
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
 
-                // Persons run alongside goats when a person model is active.
-                const persons = (data.persons && data.persons.count) || 0;
-                document.getElementById('total-persons').textContent = persons;
-                if (persons > 0) {
-                    console.warn(`🧍 Person detection: ${persons} person(s) on this frame`);
-                }
+        const sx = sourceFrameWidth ? overlay.width / sourceFrameWidth : 1;
+        const sy = sourceFrameHeight ? overlay.height / sourceFrameHeight : 1;
+        detections.forEach((detection, index) => {
+            const box = detection.bbox || {};
+            const x = (Number(box.x) || 0) * sx;
+            const y = (Number(box.y) || 0) * sy;
+            const width = (Number(box.width) || 0) * sx;
+            const height = (Number(box.height) || 0) * sy;
+            if (width <= 0 || height <= 0) return;
 
-                // Log detections for debugging
-                if (count > 0) {
-                }
+            const pixelsPerDisplayPixel = overlay.width / visibleWidth;
+            ctx.fillStyle = 'rgba(34, 197, 94, 0.14)';
+            ctx.fillRect(x, y, width, height);
+            ctx.strokeStyle = '#22c55e';
+            ctx.lineWidth = 2 * pixelsPerDisplayPixel;
+            ctx.strokeRect(x, y, width, height);
 
-                // Refresh the saved-events list and today's counter so the
-                // side panel reflects the detection that was just stored.
-                loadRecentEvents();
-                loadDetectionsToday();
-            })
-            .catch(error => {
-                console.error('Detection API error:', error);
-            });
-        }, 'image/jpeg', 0.85);
+            const confidence = Math.round((Number(detection.confidence) || 0) * 100);
+            const label = `Goat ${index + 1} · ${confidence}%`;
+            const fontSize = 12 * pixelsPerDisplayPixel;
+            ctx.font = `600 ${fontSize}px Arial, sans-serif`;
+            const padding = 4 * pixelsPerDisplayPixel;
+            const labelWidth = Math.min(ctx.measureText(label).width + (padding * 2), overlay.width);
+            const labelHeight = fontSize + (padding * 2);
+            const labelX = Math.min(Math.max(0, x), overlay.width - labelWidth);
+            const labelY = Math.min(Math.max(0, y - labelHeight),
+                                    Math.max(0, overlay.height - labelHeight));
+            ctx.fillStyle = '#22c55e';
+            ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
+            ctx.fillStyle = '#fff';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, labelX + padding, labelY + labelHeight / 2,
+                         Math.max(1, labelWidth - (padding * 2)));
+        });
     }
 
     // Stop camera and detection
     function stopCamera() {
+        viewingStoppedByUser = true;
+        if (window.gohmoDetectionPresence) window.gohmoDetectionPresence.pause();
+        detectionControl('manual_stop').then(refreshDetectionStatus).catch(console.error);
+        leaveLiveSession();
         const feedImg = document.getElementById('camera-main-feed');
         const placeholder = document.getElementById('camera-placeholder');
         const statusBadge = document.getElementById('status-badge');
         const cameraStatusText = document.getElementById('camera-status-text');
-        const countBadge = document.getElementById('main-goat-count');
-
-        // Stop detection interval
-        if (detectionInterval) {
-            clearInterval(detectionInterval);
-            detectionInterval = null;
-        }
+        clearLiveResults();
 
         // Reset UI
         feedImg.classList.add('d-none');
+        feedImg.onerror = null;
         feedImg.src = '';
+        document.getElementById('camera-main-container').style.aspectRatio = '';
         placeholder.classList.remove('d-none');
         statusBadge.textContent = 'Offline';
         statusBadge.className = 'status-badge badge bg-secondary';
         cameraStatusText.textContent = 'Offline';
-        countBadge.classList.add('d-none');
-
         cameraConnected = false;
-
-        document.getElementById('total-goats').textContent = '0';
-        document.getElementById('avg-confidence').textContent = '0%';
     }
 
     {% if is_system_admin %}// Save only non-secret preferences to localStorage
-    function saveCameraConfig() {
+    async function saveCameraConfig() {
         const config = {
             ip: document.getElementById('camera-ip').value,
             type: document.getElementById('camera-type').value,
             interval: document.getElementById('detection-interval').value
         };
         localStorage.setItem('goatCameraConfig', JSON.stringify(config));
+        try {
+            await detectionControl('set_interval', {interval: Number(config.interval)});
+        } catch (error) {
+            console.error(error);
+            alert('Detection interval could not be saved.');
+            return;
+        }
         alert('Camera configuration saved successfully!');
     }
 
@@ -624,7 +762,7 @@
     // ---- Recent detection events (real, from DetectionViewSet.recent) ------
     function loadRecentEvents() {
         const container = document.getElementById('recent-events');
-        fetch('/ml/api/detections/recent/?hours=24')
+        fetch('/ml/api/detections/recent/?hours=24&limit=15')
             .then(response => response.json())
             .then(data => {
                 if (!Array.isArray(data) || data.length === 0) {
@@ -670,12 +808,32 @@
     loadDetectionsToday();
     loadRecentEvents();
     setInterval(loadRecentEvents, 20000);
+    setInterval(loadDetectionsToday, 60000);
+
+    window.addEventListener('resize', () => {
+        if (cameraConnected) drawDetectionBoxes(latestDetectionBoxes);
+    });
+
+    window.addEventListener('pagehide', leaveLiveSession);
+    window.addEventListener('pageshow', event => {
+        if (event.persisted && !document.hidden && !viewingStoppedByUser) connectCamera();
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            leaveLiveSession();
+            const feed = document.getElementById('camera-main-feed');
+            if (feed) { feed.onerror = null; feed.src = ''; }
+            cameraConnected = false;
+        } else if (!cameraConnected && !viewingStoppedByUser) {
+            connectCamera();
+        }
+    });
 
     // Auto-load saved configuration on page load
     window.addEventListener('load', function() {
         {% if camera %}
         // Auto-connect to configured camera
-        setTimeout(() => connectCamera(), 500);
+        if (!document.hidden) setTimeout(() => connectCamera(), 500);
         {% elif is_system_admin %}
         // Try to load saved config from localStorage
         const savedConfig = localStorage.getItem('goatCameraConfig');

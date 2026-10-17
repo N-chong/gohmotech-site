@@ -15,7 +15,7 @@ from datetime import datetime, time, timedelta
 from iot.models import Device
 from ml_models.models import Detection
 from feeding.models import FeedLog
-from marketplace.auth import has_farm_access
+from marketplace.auth import default_page_name
 from marketplace.decorators import farm_access_required, staff_required
 from .models import SystemLog
 
@@ -32,15 +32,10 @@ def service_worker(request):
     return response
 
 
+@never_cache
 def dashboard_home_view(request):
     """Send public visitors and signed-in users to the right experience."""
-    if not request.user.is_authenticated:
-        return redirect('/marketplace/')
-    if not has_farm_access(request.user):
-        return redirect('/marketplace/')
-    if request.user.is_staff or request.user.is_superuser:
-        return redirect('/iot/')
-    return redirect('/iot/owner/')
+    return redirect(default_page_name(request.user))
 
 
 def _safe_error_response(status, title, message):

@@ -6,6 +6,11 @@ from rest_framework.permissions import IsAuthenticated
 from marketplace.decorators import farm_access_required, farm_owner_required, staff_required
 from marketplace.permissions import FarmRolePermission, IsAdmin, IsFarmOwnerOrAdmin
 from django.shortcuts import render
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from django.views.decorators.cache import never_cache
+from django.contrib.auth import get_user_model
+from marketplace.auth import can_manage_farm, get_system_role, has_farm_access
 from django.utils import timezone
 from django.db import IntegrityError, models
 from django.conf import settings
@@ -164,6 +169,14 @@ def _encode_image_to_data_url(image: np.ndarray) -> str:
         return ''
     b64_data = base64.b64encode(encoded.tobytes()).decode('utf-8')
     return f"data:image/png;base64,{b64_data}"
+
+
+def _detector_metadata(model):
+    """Add runtime context without mutating the model's stored metadata."""
+    metadata = dict(model.metadata or {})
+    metadata.setdefault('category', model.category)
+    metadata.setdefault('default_label', model.category)
+    return metadata
 
 
 def _extract_best_video_frame(video_path: str, detector) -> tuple:
@@ -471,7 +484,7 @@ def get_active_detector(category='goat'):
             model_path=active_model.effective_path,
             confidence_threshold=getattr(settings, 'CONFIDENCE_THRESHOLD', 0.5),
             use_gpu=getattr(settings, 'USE_GPU', False),
-            metadata=active_model.metadata or {}
+            metadata=_detector_metadata(active_model)
         )
     except Exception as e:
         logger.error(f"Failed to load {category} detector: {e}")
@@ -877,7 +890,7 @@ class MLModelViewSet(viewsets.ModelViewSet):
                 model_path=model.effective_path,
                 confidence_threshold=getattr(settings, 'CONFIDENCE_THRESHOLD', 0.5),
                 use_gpu=getattr(settings, 'USE_GPU', False),
-                metadata=model.metadata or {},
+                metadata=_detector_metadata(model),
             )
         except Exception:
             logger.exception("Uploaded model load validation failed")
@@ -924,7 +937,7 @@ class MLModelViewSet(viewsets.ModelViewSet):
                     model_path=model.effective_path,
                     confidence_threshold=getattr(settings, 'CONFIDENCE_THRESHOLD', 0.5),
                     use_gpu=getattr(settings, 'USE_GPU', False),
-                    metadata=model.metadata or {},
+                    metadata=_detector_metadata(model),
                 )
             except Exception:
                 logger.exception("Candidate model activation validation failed")
@@ -982,7 +995,11 @@ class DetectionViewSet(viewsets.ModelViewSet):
         hours = _bounded_hours(request)
         since = timezone.now() - timedelta(hours=hours)
         
-        detections = Detection.objects.filter(timestamp__gte=since).order_by('-timestamp')[:500]
+        try:
+            limit = max(1, min(500, int(request.query_params.get('limit', 500))))
+        except (TypeError, ValueError):
+            limit = 500
+        detections = Detection.objects.filter(timestamp__gte=since).order_by('-timestamp')[:limit]
         serializer = self.get_serializer(detections, many=True)
         return Response(serializer.data)
     
@@ -1378,6 +1395,97 @@ def detection_feed_view(request):
         'camera': camera,
         'active_model': active_model,
         'page_title': 'Live Detection Feed'
+    })
+
+
+@farm_access_required
+@require_http_methods(["GET", "POST"])
+def live_detection_control(request):
+    """Small control/status API; camera frames never transit this endpoint."""
+    from .live_detection import redis_client, key, status as live_status, viewer_heartbeat, viewer_leave
+
+    camera = IPCamera.objects.filter(is_active=True).first()
+    if camera is None:
+        return JsonResponse({"error": "No active camera"}, status=404)
+    client = redis_client()
+    if request.method == "POST":
+        try:
+            body = json.loads(request.body)
+            action = body.get("action")
+            token = body.get("token", "")
+            if action == "view":
+                viewer_heartbeat(camera.id, token, client)
+            elif action == "leave":
+                viewer_leave(camera.id, token, client)
+            elif action == "manual_start" and can_manage_farm(request.user):
+                viewer_heartbeat(camera.id, token, client)
+                client.set(key(camera.id, "manual"), token)
+            elif action == "manual_stop" and can_manage_farm(request.user):
+                client.delete(key(camera.id, "manual"))
+            elif action == "set_interval" and can_manage_farm(request.user):
+                interval = int(body.get("interval"))
+                if not 2 <= interval <= 60:
+                    return JsonResponse({"error": "Interval must be 2 to 60 seconds"}, status=400)
+                camera.detection_interval_seconds = interval
+                camera.save(update_fields=["detection_interval_seconds"])
+            else:
+                return JsonResponse({"error": "Invalid action or permission"}, status=403)
+        except (ValueError, TypeError, json.JSONDecodeError):
+            return JsonResponse({"error": "Invalid request"}, status=400)
+    return JsonResponse(live_status(camera.id, client))
+
+
+@farm_access_required
+@require_http_methods(["POST"])
+def user_presence_control(request):
+    """Record a visible, recently used farm page for the signed-in account."""
+    from .user_presence import heartbeat, leave
+
+    try:
+        body = json.loads(request.body)
+        action = body.get("action")
+        token = body.get("token", "")
+        if action == "view":
+            heartbeat(token, request.user.pk)
+        elif action == "leave":
+            leave(token, request.user.pk)
+        else:
+            return JsonResponse({"error": "Invalid action"}, status=400)
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return JsonResponse({"error": "Invalid request"}, status=400)
+    return JsonResponse({"ok": True})
+
+
+@staff_required
+@never_cache
+@require_http_methods(["GET"])
+def active_users_view(request):
+    """Show admins distinct farm accounts with recent browser presence."""
+    from .user_presence import active_accounts
+
+    activity = active_accounts()
+    role_labels = {
+        "admin": "Administrator",
+        "farm_owner": "Farm owner",
+        "farm_operator": "Farm operator",
+    }
+    rows = []
+    for user in get_user_model().objects.filter(pk__in=activity, is_active=True):
+        if not has_farm_access(user):
+            continue
+        signal = activity[user.pk]
+        rows.append({
+            "name": user.get_full_name() or user.get_username(),
+            "username": user.get_username(),
+            "role": role_labels.get(get_system_role(user), "Farm user"),
+            "pages": signal["pages"],
+            "last_signal": signal["last_signal"].isoformat(),
+        })
+    rows.sort(key=lambda row: row["last_signal"], reverse=True)
+    if request.GET.get("format") == "json":
+        return JsonResponse({"users": rows, "count": len(rows)})
+    return render(request, "ml_models/active_users.html", {
+        "page_title": "Active Users", "users": rows, "active_count": len(rows),
     })
 
 

@@ -5,6 +5,7 @@ Handles video capture, streaming, and reconnection logic for IoT Cameras
 
 import cv2
 import logging
+import re
 import threading
 import time
 from urllib.parse import urlsplit
@@ -21,7 +22,7 @@ def describe_stream_url(stream_url):
         parsed = urlsplit(stream_url)
         host = parsed.hostname or "unknown-host"
         port = f":{parsed.port}" if parsed.port else ""
-        path = parsed.path or "/"
+        path = re.sub(r'(?<=_password=)[^/]*?(?=_channel=)', '[redacted]', parsed.path or "/")
         return f"{parsed.scheme or 'unknown'}://{host}{port}{path}"
     except (TypeError, ValueError):
         return "invalid endpoint"
@@ -66,6 +67,9 @@ class CameraStream:
         self.source_pts = None
         self.source_pts_changed_at = None
         self.source_pts_advancing = False
+        self.last_consumer_at = time.monotonic()
+        self.idle_timeout = 90
+        self.persistent = False
 
     def _publish_frame(self, frame):
         with self.lock:
@@ -99,6 +103,7 @@ class CameraStream:
         if self.thread and self.thread.is_alive():
             return False
         if not self.is_running:
+            self.last_consumer_at = time.monotonic()
             self.is_running = True
             self.stop_event.clear()
             self.connection_state = 'connecting'
@@ -248,6 +253,14 @@ class CameraStream:
         Handles automatic reconnection on failure
         """
         while self.is_running:
+            # A feed opened by a browser should not keep decoding RTSP after
+            # every viewer has gone. Explicit camera-start controls pin it.
+            if not self.persistent and time.monotonic() - self.last_consumer_at > self.idle_timeout:
+                logger.info('Stopping idle camera stream %s after %ss without consumers',
+                            self.camera.name, self.idle_timeout)
+                self.is_running = False
+                self.stop_event.set()
+                break
             # Connect if not connected
             if not self.capture or not self.capture.isOpened():
                 if self.reconnect_attempts < self.max_reconnect_attempts:
@@ -376,6 +389,7 @@ class CameraStream:
         Returns:
             numpy.ndarray or None: Current frame or None if unavailable
         """
+        self.last_consumer_at = time.monotonic()
         with self.lock:
             if (self.frame is None or self.last_frame_monotonic is None
                     or time.monotonic() - self.last_frame_monotonic > self.frame_timeout):
@@ -392,6 +406,7 @@ class CameraStream:
 
     def get_jpeg_packet(self, quality=85, max_width=1280, include_captured_at=False):
         """Encode once per source frame/quality, shared by all viewers."""
+        self.last_consumer_at = time.monotonic()
         with self.encode_lock:
             with self.lock:
                 sequence = self.frame_sequence
@@ -474,7 +489,7 @@ class CameraStreamManager:
         self.lock = threading.Lock()
         self.startup_delay = 0  # No delay needed for single camera system
     
-    def get_stream(self, camera_id):
+    def get_stream(self, camera_id, persistent=False):
         """
         Get or create a camera stream
         
@@ -490,6 +505,8 @@ class CameraStreamManager:
             # Return existing stream if available
             if camera_id in self.streams:
                 stream = self.streams[camera_id]
+                if persistent:
+                    stream.persistent = True
                 if not stream.thread or not stream.thread.is_alive():
                     logger.warning('Restarting camera %s worker after exit', camera_id)
                     stream.is_running = False
@@ -505,6 +522,7 @@ class CameraStreamManager:
                     time.sleep(self.startup_delay)
                 
                 stream = CameraStream(camera)
+                stream.persistent = persistent
                 stream.start()
                 self.streams[camera_id] = stream
                 return stream
