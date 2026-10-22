@@ -164,6 +164,18 @@ class BLETrackingStatusTests(TestCase):
         self.assertIsNone(never_seen['current_rssi'])
 
 
+    def test_snapshot_can_be_scoped_to_smart_farm_goats(self):
+        self.create_beacon('FARM-001', 31)
+        community = self.create_beacon('COMMUNITY-001', 32)
+        community.goat.record_source = Goat.COMMUNITY
+        community.goat.save(update_fields=['record_source'])
+
+        snapshot = build_tracking_snapshot(record_source=Goat.SMART_FARM)
+
+        self.assertEqual(snapshot['summary']['tracked_goats'], 1)
+        self.assertEqual(snapshot['goats'][0]['goat']['goat_id'], 'FARM-001')
+
+
 class BLETrackingPageAndApiTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(

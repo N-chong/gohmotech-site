@@ -15,6 +15,7 @@ mechanism is introduced):
     restricted to staff.
 """
 
+from django.db.models import Count, Q
 from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
 
@@ -127,6 +128,16 @@ class PersonDetectionViewSet(viewsets.ModelViewSet):
     search_fields = ['source_label', 'review_notes']
     ordering_fields = ['detected_at', 'confidence', 'status']
     ordering = ['-detected_at']
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        queryset = self.filter_queryset(self.get_queryset())
+        response.data["summary"] = queryset.aggregate(
+            high_confidence=Count("id", filter=Q(confidence__gte=0.8)),
+            reviewed=Count("id", filter=Q(review_state="reviewed")),
+            unreviewed=Count("id", filter=Q(review_state="unreviewed")),
+        )
+        return response
 
     def perform_create(self, serializer):
         detection = serializer.save()

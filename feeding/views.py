@@ -11,6 +11,7 @@ from .serializers import (FeedScheduleSerializer, FeedLevelSerializer,
                           FeedLogSerializer, AutomatedFeedingConfigSerializer)
 from iot.models import Device
 from iot.device_authentication import HasLegacyDeviceKey
+from iot.status_utils import device_last_seen, is_device_online
 import logging
 
 logger = logging.getLogger(__name__)
@@ -183,11 +184,29 @@ class FeedLogViewSet(viewsets.ModelViewSet):
     def manual_feed(self, request):
         """Trigger manual feeding"""
         feeder_id = request.data.get('feeder_id')
-        amount = int(request.data.get('amount', 500))
-        
+        try:
+            amount = int(request.data.get('amount', 500))
+        except (TypeError, ValueError):
+            return Response(
+                {'error': 'amount must be a whole number between 1 and 10000 grams'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if amount < 1 or amount > 10000:
+            return Response(
+                {'error': 'amount must be between 1 and 10000 grams'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
             feeder = Device.objects.get(id=feeder_id, device_type='feeder')
-            
+            if not is_device_online(feeder):
+                return Response({
+                    'error': 'Feeder controller is offline. No feed command was created.',
+                    'code': 'FEEDER_OFFLINE',
+                    'device_online': False,
+                    'device_last_seen': device_last_seen(feeder),
+                }, status=status.HTTP_409_CONFLICT)
+
             # Create feed log
             feed_log = FeedLog.objects.create(
                 feeder=feeder,
@@ -207,7 +226,12 @@ class FeedLogViewSet(viewsets.ModelViewSet):
                 pass
             
             serializer = self.get_serializer(feed_log)
-            return Response(serializer.data)
+            return Response({
+                **serializer.data,
+                'device_online': True,
+                'result': 'sent',
+                'confirmation': 'pending_device_confirmation',
+            })
             
         except Device.DoesNotExist:
             return Response(
@@ -367,7 +391,7 @@ class FeedLogViewSet(viewsets.ModelViewSet):
         
         try:
             feeder = Device.objects.get(id=feeder_id, device_type='feeder')
-            
+
             # Create feed log with physical button trigger
             feed_log = FeedLog.objects.create(
                 feeder=feeder,

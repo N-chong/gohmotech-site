@@ -154,6 +154,20 @@ class ActuatorStateSerializer(serializers.ModelSerializer):
     actuator_type_display = serializers.CharField(source='get_actuator_type_display', read_only=True)
     current_state_display = serializers.CharField(source='get_current_state_display', read_only=True)
     mode_display = serializers.CharField(source='get_mode_display', read_only=True)
+    device_online = serializers.SerializerMethodField()
+    device_last_seen = serializers.SerializerMethodField()
+    controller_role = serializers.SerializerMethodField()
+
+    def get_device_online(self, obj):
+        from .status_utils import is_device_online
+        return is_device_online(obj.device)
+
+    def get_device_last_seen(self, obj):
+        from .status_utils import device_last_seen
+        return device_last_seen(obj.device)
+
+    def get_controller_role(self, obj):
+        return 'feeder' if obj.actuator_type == 'feeder' else 'main'
     
     class Meta:
         model = ActuatorState

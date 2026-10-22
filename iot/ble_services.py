@@ -215,7 +215,7 @@ def refresh_tracking_statuses(now=None):
     return config
 
 
-def build_tracking_snapshot(now=None):
+def build_tracking_snapshot(now=None, record_source=None):
     """Return the current list payload without implying exact position."""
     now = now or timezone.now()
     config = refresh_tracking_statuses(now)
@@ -226,7 +226,10 @@ def build_tracking_snapshot(now=None):
     beacons = BLEBeacon.objects.filter(
         enabled=True,
         goat__isnull=False,
-    ).select_related('goat').prefetch_related(
+    )
+    if record_source is not None:
+        beacons = beacons.filter(goat__record_source=record_source)
+    beacons = beacons.select_related('goat').prefetch_related(
         Prefetch(
             'goat__images',
             queryset=image_queryset,
